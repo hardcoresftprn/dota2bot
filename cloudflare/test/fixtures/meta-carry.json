@@ -1,0 +1,65 @@
+{
+  "rank": "all",
+  "position": "carry",
+  "patch": "7.41f",
+  "unavailable": null,
+  "fallback": null,
+  "minGames": 1001,
+  "fetchedAt": "2026-11-06T20:17:51Z",
+  "updatedAt": "2026-11-06T20:17:51.000Z",
+  "sampleFrom": "2026-10-29",
+  "sampleTo": "2026-11-05",
+  "sampleMatches": 1000414.5,
+  "rows": [
+    {
+      "heroId": 12,
+      "name": "Phantom Lancer",
+      "slug": "phantom-lancer",
+      "tier": "S",
+      "score": 95,
+      "winrate": 54.08,
+      "pickRate": 11.753828038278135,
+      "matches": 117587
+    },
+    {
+      "heroId": 42,
+      "name": "Wraith King",
+      "slug": "wraith-king",
+      "tier": "S",
+      "score": 92,
+      "winrate": 55.21,
+      "pickRate": 3.296933421096955,
+      "matches": 32983
+    },
+    {
+      "heroId": 67,
+      "name": "Spectre",
+      "slug": "spectre",
+      "tier": "S",
+      "score": 91,
+      "winrate": 53.31,
+      "pickRate": 7.747788541649486,
+      "matches": 77510
+    },
+    {
+      "heroId": 8,
+      "name": "Juggernaut",
+      "slug": "juggernaut",
+      "tier": "A",
+      "score": 91,
+      "winrate": 53.09,
+      "pickRate": 15.48578114371593,
+      "matches": 154922
+    },
+    {
+      "heroId": 44,
+      "name": "Phantom Assassin",
+      "slug": "phantom-assassin",
+      "tier": "A",
+      "score": 86,
+      "winrate": 52.53,
+      "pickRate": 11.163572699116216,
+      "matches": 111682
+    }
+  ]
+}

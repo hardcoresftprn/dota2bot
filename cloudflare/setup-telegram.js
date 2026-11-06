@@ -54,10 +54,11 @@ try {
     { command: 'start', description: 'Подписаться на важные обновления' },
     { command: 'stop', description: 'Отключить рассылку' },
     { command: 'latest', description: 'Последний сохранённый разбор' },
+    { command: 'meta', description: 'Мета по позициям и рангам' },
     { command: 'status', description: 'Подписка и проверка источников' },
     { command: 'help', description: 'Как пользоваться ботом' },
   ] });
-  await call('setWebhook', { url: target, secret_token: secret, allowed_updates: ['message'], max_connections: 1, drop_pending_updates: false });
+  await call('setWebhook', { url: target, secret_token: secret, allowed_updates: ['message', 'callback_query'], max_connections: 1, drop_pending_updates: false });
   const check = await call('getWebhookInfo', {});
   if (check.url !== target) throw new Error('Webhook not confirmed');
   console.log(`Бот подключён: https://t.me/${me.username}`);

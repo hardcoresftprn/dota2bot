@@ -1,0 +1,65 @@
+{
+  "rank": "all",
+  "position": "soft-support",
+  "patch": "7.41f",
+  "unavailable": null,
+  "fallback": null,
+  "minGames": 1016,
+  "fetchedAt": "2026-11-06T20:17:51Z",
+  "updatedAt": "2026-11-06T20:17:51.000Z",
+  "sampleFrom": "2026-10-29",
+  "sampleTo": "2026-11-05",
+  "sampleMatches": 1015176.5,
+  "rows": [
+    {
+      "heroId": 88,
+      "name": "Nyx Assassin",
+      "slug": "nyx-assassin",
+      "tier": "S",
+      "score": 97,
+      "winrate": 53.98,
+      "pickRate": 4.859549053785228,
+      "matches": 49333
+    },
+    {
+      "heroId": 62,
+      "name": "Bounty Hunter",
+      "slug": "bounty-hunter",
+      "tier": "S",
+      "score": 97,
+      "winrate": 53.61,
+      "pickRate": 4.609050741422797,
+      "matches": 46790
+    },
+    {
+      "heroId": 71,
+      "name": "Spirit Breaker",
+      "slug": "spirit-breaker",
+      "tier": "S",
+      "score": 95,
+      "winrate": 52.58,
+      "pickRate": 9.786475553758386,
+      "matches": 99350
+    },
+    {
+      "heroId": 9,
+      "name": "Mirana",
+      "slug": "mirana",
+      "tier": "A",
+      "score": 92,
+      "winrate": 52.57,
+      "pickRate": 5.021983861919577,
+      "matches": 50982
+    },
+    {
+      "heroId": 121,
+      "name": "Grimstroke",
+      "slug": "grimstroke",
+      "tier": "A",
+      "score": 92,
+      "winrate": 52.83,
+      "pickRate": 3.244066425887518,
+      "matches": 32933
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "rank": "all",
+  "position": "mid",
+  "patch": "7.41f",
+  "unavailable": null,
+  "fallback": null,
+  "minGames": 997,
+  "fetchedAt": "2026-11-06T20:17:51Z",
+  "updatedAt": "2026-11-06T20:17:51.000Z",
+  "sampleFrom": "2026-10-29",
+  "sampleTo": "2026-11-05",
+  "sampleMatches": 996739.5,
+  "rows": [
+    {
+      "heroId": 76,
+      "name": "Outworld Destroyer",
+      "slug": "outworld-destroyer",
+      "tier": "S",
+      "score": 97,
+      "winrate": 53.94,
+      "pickRate": 9.825235179302116,
+      "matches": 97932
+    },
+    {
+      "heroId": 49,
+      "name": "Dragon Knight",
+      "slug": "dragon-knight",
+      "tier": "A",
+      "score": 94,
+      "winrate": 54.68,
+      "pickRate": 3.756447898372644,
+      "matches": 37442
+    },
+    {
+      "heroId": 74,
+      "name": "Invoker",
+      "slug": "invoker",
+      "tier": "A",
+      "score": 87,
+      "winrate": 51.91,
+      "pickRate": 14.209429846012926,
+      "matches": 141631
+    },
+    {
+      "heroId": 113,
+      "name": "Arc Warden",
+      "slug": "arc-warden",
+      "tier": "B",
+      "score": 85,
+      "winrate": 52.47,
+      "pickRate": 5.677009890748787,
+      "matches": 56585
+    },
+    {
+      "heroId": 14,
+      "name": "Pudge",
+      "slug": "pudge",
+      "tier": "B",
+      "score": 80,
+      "winrate": 52.63,
+      "pickRate": 3.9910126968982365,
+      "matches": 39780
+    }
+  ]
+}

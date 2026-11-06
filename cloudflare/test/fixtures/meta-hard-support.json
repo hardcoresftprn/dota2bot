@@ -1,0 +1,65 @@
+{
+  "rank": "all",
+  "position": "hard-support",
+  "patch": "7.41f",
+  "unavailable": null,
+  "fallback": null,
+  "minGames": 997,
+  "fetchedAt": "2026-11-06T20:17:51Z",
+  "updatedAt": "2026-11-06T20:17:51.000Z",
+  "sampleFrom": "2026-10-29",
+  "sampleTo": "2026-11-05",
+  "sampleMatches": 996183.5,
+  "rows": [
+    {
+      "heroId": 31,
+      "name": "Lich",
+      "slug": "lich",
+      "tier": "S",
+      "score": 94,
+      "winrate": 52.73,
+      "pickRate": 6.717838631135729,
+      "matches": 66922
+    },
+    {
+      "heroId": 30,
+      "name": "Witch Doctor",
+      "slug": "witch-doctor",
+      "tier": "S",
+      "score": 92,
+      "winrate": 52.19,
+      "pickRate": 11.199041140512767,
+      "matches": 111563
+    },
+    {
+      "heroId": 20,
+      "name": "Vengeful Spirit",
+      "slug": "vengeful-spirit",
+      "tier": "S",
+      "score": 91,
+      "winrate": 53.03,
+      "pickRate": 3.2126611211689413,
+      "matches": 32004
+    },
+    {
+      "heroId": 50,
+      "name": "Dazzle",
+      "slug": "dazzle",
+      "tier": "A",
+      "score": 90,
+      "winrate": 52.52,
+      "pickRate": 4.447975699256211,
+      "matches": 44310
+    },
+    {
+      "heroId": 5,
+      "name": "Crystal Maiden",
+      "slug": "crystal-maiden",
+      "tier": "A",
+      "score": 87,
+      "winrate": 51.84,
+      "pickRate": 10.001269846368665,
+      "matches": 99631
+    }
+  ]
+}

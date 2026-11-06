@@ -1,28 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { D1 } from './helpers/d1.js';
 import worker, { statement, getMeta, setMeta, saveEvent, checkPatches, checkNews, deliver, scheduled, handleUpdate } from '../src/worker.js';
 import { basicSummary, render, newsCategories, newsEvent, versionOf, notes, loadPatch } from '../src/content.js';
 
-class D1 {
-  constructor() { this.db = new DatabaseSync(':memory:'); this.db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8')); }
-  prepare(sql) {
-    const db = this.db;
-    return { bind(...args) {
-      return {
-        async first() { return db.prepare(sql).get(...args) || null; },
-        async all() { return { results: db.prepare(sql).all(...args) }; },
-        async run() { const result = db.prepare(sql).run(...args); return { meta: { changes: Number(result.changes) } }; },
-      };
-    } };
-  }
-  async batch(statements) {
-    this.db.exec('BEGIN');
-    try { const result = []; for (const stmt of statements) result.push(await stmt.run()); this.db.exec('COMMIT'); return result; }
-    catch (error) { this.db.exec('ROLLBACK'); throw error; }
-  }
-}
 const envFor = t => {
   const env = { DB: new D1(), TELEGRAM_BOT_TOKEN: 'fake', TELEGRAM_WEBHOOK_SECRET: 'test-secret' };
   t.after(() => env.DB.db.close()); return env;

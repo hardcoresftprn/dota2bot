@@ -1,0 +1,65 @@
+{
+  "rank": "all",
+  "position": "offlane",
+  "patch": "7.41f",
+  "unavailable": null,
+  "fallback": null,
+  "minGames": 1000,
+  "fetchedAt": "2026-11-06T20:17:51Z",
+  "updatedAt": "2026-11-06T20:17:51.000Z",
+  "sampleFrom": "2026-10-29",
+  "sampleTo": "2026-11-05",
+  "sampleMatches": 999929.5,
+  "rows": [
+    {
+      "heroId": 42,
+      "name": "Wraith King",
+      "slug": "wraith-king",
+      "tier": "S",
+      "score": 99,
+      "winrate": 55.62,
+      "pickRate": 7.677941294861287,
+      "matches": 76774
+    },
+    {
+      "heroId": 104,
+      "name": "Legion Commander",
+      "slug": "legion-commander",
+      "tier": "S",
+      "score": 95,
+      "winrate": 53.06,
+      "pickRate": 11.782530668412123,
+      "matches": 117817
+    },
+    {
+      "heroId": 49,
+      "name": "Dragon Knight",
+      "slug": "dragon-knight",
+      "tier": "S",
+      "score": 91,
+      "winrate": 52.51,
+      "pickRate": 8.156575038540218,
+      "matches": 81560
+    },
+    {
+      "heroId": 60,
+      "name": "Night Stalker",
+      "slug": "night-stalker",
+      "tier": "A",
+      "score": 90,
+      "winrate": 51.88,
+      "pickRate": 6.313845126081389,
+      "matches": 63134
+    },
+    {
+      "heroId": 135,
+      "name": "Dawnbreaker",
+      "slug": "dawnbreaker",
+      "tier": "A",
+      "score": 89,
+      "winrate": 51.71,
+      "pickRate": 7.489227990573336,
+      "matches": 74887
+    }
+  ]
+}

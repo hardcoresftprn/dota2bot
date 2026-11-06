@@ -1,4 +1,5 @@
 import { DOTA, STEAM, getJSON, loadPatch, newsEvent, summarize, now } from './content.js';
+import { metaReply, parseMetaArgs, parseMetaCallback, rankMenu } from './meta.js';
 
 export const statement = (db, sql, ...args) => db.prepare(sql).bind(...args);
 export const getMeta = async (db, key) => (await statement(db, 'SELECT value FROM meta WHERE key=?', key).first())?.value;
@@ -93,7 +94,7 @@ export async function checkNews(env) {
 }
 
 export class TelegramError extends Error {
-  constructor(code, retryAfter = 0) { super(`Telegram ${code}`); this.code = code; this.retryAfter = retryAfter; }
+  constructor(code, retryAfter = 0, description = '') { super(`Telegram ${code}`); this.code = code; this.retryAfter = retryAfter; this.description = description; }
 }
 export async function telegram(env, method, params) {
   // Never log the URL: it contains the bot token.
@@ -102,10 +103,10 @@ export async function telegram(env, method, params) {
   });
   let data;
   try { data = await response.json(); } catch { throw new TelegramError(response.status); }
-  if (!data.ok) throw new TelegramError(data.error_code || response.status, data.parameters?.retry_after || 0);
+  if (!data.ok) throw new TelegramError(data.error_code || response.status, data.parameters?.retry_after || 0, data.description || '');
   return data.result;
 }
-const send = (env, chatID, text) => telegram(env, 'sendMessage', { chat_id: chatID, text, parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+const send = (env, chatID, text, extra = {}) => telegram(env, 'sendMessage', { chat_id: chatID, text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...extra });
 export async function deliver(env) {
   const db = env.DB;
   await statement(db, "UPDATE deliveries SET status='uncertain' WHERE status='sending' AND started<?", now() - 300).run();
@@ -163,28 +164,51 @@ async function isAdmin(env, message) {
   return ['creator', 'administrator'].includes(member.status);
 }
 export async function handleUpdate(env, update) {
-  const message = update.message;
-  if (!message?.text?.startsWith('/') || !Number.isSafeInteger(update.update_id) || !Number.isSafeInteger(message.chat?.id)) return;
-  const commandText = message.text.split(/\s/)[0].slice(1);
+  const callback = update.callback_query;
+  const selection = callback ? parseMetaCallback(callback.data) : null;
+  const message = callback ? callback.message : update.message;
+  if ((!callback && !message?.text?.startsWith('/')) || (callback && !selection)
+      || !Number.isSafeInteger(update.update_id) || !Number.isSafeInteger(message?.chat?.id)) return;
+  const commandText = callback ? 'meta' : message.text.split(/\s/)[0].slice(1);
   const [command, mention] = commandText.split('@');
-  if (!['start', 'stop', 'latest', 'status', 'help'].includes(command)) return;
+  if (!['start', 'stop', 'latest', 'status', 'help', 'meta'].includes(command)) return;
   if (mention) {
     let username = await getMeta(env.DB, 'bot_username');
     if (!username) { username = (await telegram(env, 'getMe', {})).username; await setMeta(env.DB, 'bot_username', username); }
     if (mention.toLowerCase() !== username.toLowerCase()) return;
   }
   const allowed = String(env.ALLOWED_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
-  if (allowed.length && !allowed.includes(String(message.from?.id))) return;
+  const actor = callback ? callback.from : message.from;
+  if (allowed.length && !allowed.includes(String(actor?.id))) return;
+  if (callback) {
+    try { await telegram(env, 'answerCallbackQuery', { callback_query_id: callback.id }); }
+    catch { /* A stale callback can still have a useful cached result. */ }
+  }
   const receipt = await statement(env.DB, 'INSERT OR IGNORE INTO updates(id,received) VALUES(?,?) RETURNING id', update.update_id, now()).first();
   if (!receipt) return;
   const chatID = message.chat.id;
+  if (command === 'meta') {
+    const params = selection || parseMetaArgs(message.text);
+    const result = params.error ? { text: params.error }
+      : params.ranksMenu ? rankMenu(params.rank, params.position)
+        : await metaReply(env.DB, params.rank, params.position);
+    if (callback) {
+      try {
+        await telegram(env, 'editMessageText', { chat_id: chatID, message_id: message.message_id,
+          text: result.text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: result.reply_markup });
+      } catch (error) {
+        if (!(error instanceof TelegramError && error.code === 400 && /message is not modified/i.test(error.description))) throw error;
+      }
+    } else await send(env, chatID, result.text, result.reply_markup ? { reply_markup: result.reply_markup } : {});
+    return;
+  }
   if (['start', 'stop'].includes(command) && !await isAdmin(env, message)) {
     await send(env, chatID, 'Подписку группы включает и выключает её администратор.'); return;
   }
   let answer;
   if (command === 'start') {
     await statement(env.DB, 'INSERT INTO chats(id,active) VALUES(?,1) ON CONFLICT(id) DO UPDATE SET active=1', chatID).run();
-    answer = '✅ Подписка включена. Пришлю новые важные обновления Dota 2 с разбором и ссылкой Valve.\n\nПоследний разбор: /latest\nОтключить: /stop';
+    answer = '✅ Подписка включена. Пришлю новые важные обновления Dota 2 с разбором и ссылкой Valve.\n\nМета по пяти позициям: /meta\nПоследний разбор: /latest\nОтключить: /stop';
   } else if (command === 'stop') {
     await env.DB.batch([
       statement(env.DB, 'INSERT INTO chats(id,active) VALUES(?,0) ON CONFLICT(id) DO UPDATE SET active=0', chatID),
@@ -202,7 +226,7 @@ export async function handleUpdate(env, update) {
       + (now() - Number(checked[key]) > 1200 ? ' ⚠️ давно не было успешной проверки' : '') : 'ожидание первой проверки';
     answer = `Рассылка: ${active ? 'включена ✅' : 'выключена 🔕'}\nПроверка каждого источника: каждые 10 мин.\nValve: ${stamp('patches_checked')}\nSteam: ${stamp('news_checked')}`;
   } else {
-    answer = '🎮 <b>Dota Patch Watch</b>\n\n/start — подписаться\n/stop — отписаться\n/latest — запросить последний разбор\n/status — подписка и состояние источников\n\nПроверяю Valve и Steam каждые 10 минут. Крупные патчи, новые герои, баланс и рейтинг. Косметика, турниры и обычные багфиксы не входят в рассылку.\n\nВ общем чате администратор отправляет /start@имя_бота. /latest повторно показывает разбор только по вашему запросу. Выводы о влиянии — оценка по примечаниям, без выдуманной статистики.';
+    answer = '🎮 <b>Dota Patch Watch</b>\n\n/start — подписаться\n/stop — отписаться\n/meta — актуальная мета по пяти позициям\n/latest — запросить последний разбор\n/status — подписка и состояние источников\n\n<b>Мета</b>\nВыберите позицию и ранг кнопками под /meta. Примеры: /meta 2 — мид; /meta 1 legend — керри на Легенде. Источник StatsDota, кеш 1 час. Мета приходит только по вашему запросу.\n\nПроверяю Valve и Steam каждые 10 минут. Крупные патчи, новые герои, баланс и рейтинг. Косметика, турниры и обычные багфиксы не входят в рассылку.\n\nВ общем чате администратор отправляет /start@имя_бота. /latest повторно показывает разбор только по вашему запросу. Выводы о влиянии — оценка по примечаниям, без выдуманной статистики.';
   }
   await send(env, chatID, answer);
 }
