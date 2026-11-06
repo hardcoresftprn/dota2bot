@@ -97,7 +97,7 @@ function richText(raw) {
       if (['B', 'I', 'EM', 'STRONG', 'U', 'BR'].includes(child.tagName)) { const node = document.createElement(child.tagName); append(node, child); parent.append(node); }
       else if (child.tagName === 'A') {
         let url; try { url = new URL(child.getAttribute('href')); } catch { /* Plain text below. */ }
-        if (url?.protocol === 'https:' && ['www.dota2.com', 'dota2.com', 'store.steampowered.com', 'steamcommunity.com'].includes(url.hostname)) { const node = link('', url.href); append(node, child); parent.append(node); }
+        if (url?.protocol === 'https:' && ['www.dota2.com', 'dota2.com', 'store.steampowered.com', 'steamcommunity.com', 'steamstore-a.akamaihd.net'].includes(url.hostname)) { const node = link('', url.href); append(node, child); parent.append(node); }
         else append(parent, child);
       } else append(parent, child);
     }
