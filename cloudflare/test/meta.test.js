@@ -51,6 +51,12 @@ test('invalid or low-sample rows are excluded, not promoted to top heroes', () =
   data.rows.unshift({ ...data.rows[1], heroId: 9998, score: 100, winrate: 150 });
   assert.ok(normalizeSlice(data, 'all', 'carry', NOW).heroes.every(row => row.heroId < 9998));
 });
+test('rounded score ties preserve the source order instead of sorting by raw win rate', () => {
+  const data = fresh();
+  data.rows[1].score = data.rows[0].score;
+  data.rows[1].winrate = 90;
+  assert.equal(normalizeSlice(data, 'all', 'carry', NOW).heroes[0].heroId, data.rows[0].heroId);
+});
 test('all five positions load from their actual position-specific source slices', async t => {
   const env = envFor(t), positions = [];
   const stub = t.mock.method(globalThis, 'fetch', async url => {

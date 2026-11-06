@@ -63,7 +63,7 @@ export function normalizeSlice(data, rank, position, checkedAt = now()) {
   // The source already excludes low samples and niche/rare picks from rows.
   const unique = new Map();
   for (const row of valid) if (!unique.has(row.heroId)) unique.set(row.heroId, row);
-  const heroes = [...unique.values()].sort((a, b) => b.score - a.score || b.winrate - a.winrate).slice(0, 5)
+  const heroes = [...unique.values()].sort((a, b) => b.score - a.score).slice(0, 5)
     .map(({ heroId, name, slug, tier, score, winrate, pickRate, matches }) => ({ heroId, name, slug, tier, score, winrate, pickRate, matches }));
   if (!heroes.length) throw new Error('No sufficiently sampled heroes');
   return { rank: data.rank, requestedRank: rank, position, patch: data.patch, updatedAt: Math.floor(updated / 1000),
