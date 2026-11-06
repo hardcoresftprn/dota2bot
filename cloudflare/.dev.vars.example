@@ -1,0 +1,6 @@
+# Local development only. Never commit .dev.vars.
+TELEGRAM_BOT_TOKEN=""
+TELEGRAM_WEBHOOK_SECRET=""
+# Optional paid AI summaries; empty = free Russian Valve summaries.
+OPENAI_API_KEY=""
+OPENAI_MODEL="gpt-4.1-mini"

@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+data/
+dist/
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.DS_Store

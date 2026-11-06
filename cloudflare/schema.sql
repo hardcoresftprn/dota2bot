@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS events (key TEXT PRIMARY KEY, published INTEGER NOT NULL, message TEXT, broadcast INTEGER NOT NULL DEFAULT 1);
+CREATE INDEX IF NOT EXISTS events_latest ON events(published DESC) WHERE message IS NOT NULL;
+CREATE TABLE IF NOT EXISTS deliveries (
+  event_key TEXT NOT NULL REFERENCES events(key),
+  chat_id INTEGER NOT NULL REFERENCES chats(id),
+  status TEXT NOT NULL DEFAULT 'pending',
+  next_attempt INTEGER NOT NULL DEFAULT 0,
+  started INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (event_key, chat_id)
+);
+CREATE INDEX IF NOT EXISTS deliveries_pending ON deliveries(status,next_attempt);
+CREATE TRIGGER IF NOT EXISTS queue_new_event AFTER INSERT ON events
+WHEN NEW.message IS NOT NULL AND NEW.broadcast=1
+BEGIN
+  INSERT OR IGNORE INTO deliveries(event_key,chat_id)
+    SELECT NEW.key,id FROM chats WHERE active=1;
+END;
+CREATE TABLE IF NOT EXISTS updates (id INTEGER PRIMARY KEY, received INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS leases (key TEXT PRIMARY KEY, owner TEXT NOT NULL, expires INTEGER NOT NULL);

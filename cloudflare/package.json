@@ -1,0 +1,17 @@
+{
+  "name": "dota-patch-watch-cloudflare",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 execute DB --local --file=schema.sql",
+    "db:remote": "wrangler d1 execute DB --remote --file=schema.sql",
+    "telegram:setup": "node setup-telegram.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.158.0"
+  }
+}
