@@ -25,7 +25,7 @@ test('small or malformed matchup samples excluded',()=>{
  const c=normalizeCells(cells,heroes);assert.equal(c[1][2],undefined);assert.equal(c[1][3],undefined);assert.equal(c[1][4],undefined);assert.deepEqual(c[2][1],[1,51,200]);assert.throws(()=>normalizeCells({},heroes));
 });
 test('cache, stale fallback, backoff and expiration',async t=>{
- const db=new D1(),timestamp=100000;db.db.prepare('INSERT INTO meta VALUES(?,?)').run('counters:v2',JSON.stringify({...data,checkedAt:timestamp,catalogueUpdatedAt:timestamp}));
+ const db=new D1(),timestamp=100000;db.db.prepare('INSERT INTO meta VALUES(?,?)').run('counters:v3',JSON.stringify({...data,checkedAt:timestamp,catalogueUpdatedAt:timestamp}));
  let calls=0;t.mock.method(globalThis,'fetch',async()=>{calls++;throw new Error('offline');});
  assert.equal((await loadCounters(db,timestamp+100)).stale,false);assert.equal(calls,0);
  assert.equal((await loadCounters(db,timestamp+3601)).stale,true);assert.equal(calls,2);await loadCounters(db,timestamp+3602);assert.equal(calls,2);

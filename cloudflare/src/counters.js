@@ -2,7 +2,7 @@ import { POSITIONS } from './meta.js';
 import { HERO_IMAGES } from './hero-images.js';
 import { now } from './content.js';
 const q = (db, sql, ...args) => db.prepare(sql).bind(...args);
-const KEY = 'counters:v2';
+const KEY = 'counters:v3';
 const TTL = 3600, MAX_AGE = 2 * 86400;
 export const SOURCE = 'https://statsdota.com/en/counters/team';
 
@@ -43,11 +43,11 @@ export async function loadCounters(db, timestamp = now()) {
   if (usable && timestamp - cached.checkedAt < TTL) return { ...cached, stale: false };
   if (cached?.retryAt > timestamp) { if (usable) return { ...cached, stale: true }; throw new Error('Counter source: ' + (cached.issue || 'retry'));  }
   const owner = crypto.randomUUID();
-  const lock = await q(db, `INSERT INTO leases(key,owner,expires) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,expires=excluded.expires WHERE leases.expires<? RETURNING owner`, KEY, owner, timestamp + 35, timestamp).first();
+  const lock = await q(db, `INSERT INTO leases(key,owner,expires) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,expires=excluded.expires WHERE leases.expires<? RETURNING owner`, KEY, owner, timestamp + 65, timestamp).first();
   if (!lock) { if (usable) return { ...cached, stale: true }; throw new Error('Counter cache is warming'); }
   try {
     try {
-      const [page, response] = await Promise.all([fetch(SOURCE, { signal: AbortSignal.timeout(12000) }), fetch('https://statsdota.com/api/counter-cells', { signal: AbortSignal.timeout(12000) })]);
+      const [page, response] = await Promise.all([fetch(SOURCE, { signal: AbortSignal.timeout(30000) }).catch(() => { throw new Error('Counter HTTP catalogue timeout'); }), fetch('https://statsdota.com/api/counter-cells', { signal: AbortSignal.timeout(30000), headers: { Accept: 'application/json' } }).catch(() => { throw new Error('Counter HTTP matchups timeout'); })]);
       if (!page.ok || !response.ok) throw new Error(`Counter HTTP ${page.status}/${response.status}`);
       const catalogue = parseCounterPage(await page.text());
       const cells = normalizeCells((await response.json()).cells, catalogue.heroes);

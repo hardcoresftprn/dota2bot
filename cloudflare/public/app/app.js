@@ -172,7 +172,7 @@ async function openCounters() {
   counterPosition();
   if (counter.catalogue || counter.loading) return;
   counter.loading = true; empty($('#enemy-search-results'), 'Загружаю героев…');
-  try { counter.catalogue = await api('/api/counters'); renderEnemyPicker(); }
+  try { counter.catalogue = await api('/api/counters', { signal: AbortSignal.timeout(45000) }); renderEnemyPicker(); }
   catch (error) { empty($('#enemy-search-results'), error.message, openCounters); }
   finally { counter.loading = false; }
 }
