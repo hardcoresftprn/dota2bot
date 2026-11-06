@@ -2,7 +2,7 @@ import { POSITIONS } from './meta.js';
 import { HERO_IMAGES } from './hero-images.js';
 import { now } from './content.js';
 const q = (db, sql, ...args) => db.prepare(sql).bind(...args);
-const KEY = 'counters:v1';
+const KEY = 'counters:v2';
 const TTL = 3600, MAX_AGE = 2 * 86400;
 export const SOURCE = 'https://statsdota.com/en/counters/team';
 
@@ -41,23 +41,24 @@ export async function loadCounters(db, timestamp = now()) {
   try { cached = JSON.parse((await q(db, 'SELECT value FROM meta WHERE key=?', KEY).first())?.value); } catch { /* Empty cache. */ }
   const usable = cached?.heroes?.length && cached?.cells && timestamp - cached.checkedAt < MAX_AGE;
   if (usable && timestamp - cached.checkedAt < TTL) return { ...cached, stale: false };
-  if (cached?.retryAt > timestamp) { if (usable) return { ...cached, stale: true }; throw new Error('Counter source backoff'); }
+  if (cached?.retryAt > timestamp) { if (usable) return { ...cached, stale: true }; throw new Error('Counter source: ' + (cached.issue || 'retry'));  }
   const owner = crypto.randomUUID();
   const lock = await q(db, `INSERT INTO leases(key,owner,expires) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,expires=excluded.expires WHERE leases.expires<? RETURNING owner`, KEY, owner, timestamp + 35, timestamp).first();
   if (!lock) { if (usable) return { ...cached, stale: true }; throw new Error('Counter cache is warming'); }
   try {
     try {
       const [page, response] = await Promise.all([fetch(SOURCE, { signal: AbortSignal.timeout(12000) }), fetch('https://statsdota.com/api/counter-cells', { signal: AbortSignal.timeout(12000) })]);
-      if (!page.ok || !response.ok) throw new Error('Counter source unavailable');
+      if (!page.ok || !response.ok) throw new Error(`Counter HTTP ${page.status}/${response.status}`);
       const catalogue = parseCounterPage(await page.text());
       const cells = normalizeCells((await response.json()).cells, catalogue.heroes);
       const value = { ...catalogue, cells, checkedAt: timestamp };
       await q(db, 'INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', KEY, JSON.stringify(value)).run();
       return { ...value, stale: false };
-    } catch {
-      await q(db, 'INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', KEY, JSON.stringify({ ...(cached || {}), retryAt: timestamp + 300 })).run();
+    } catch (error) {
+      const issue = /^Counter HTTP |^Counter catalogue|^Invalid counter|^Counter sample/.test(error.message) ? error.message : error.name;
+      await q(db, 'INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', KEY, JSON.stringify({ ...(cached || {}), retryAt: timestamp + 300, issue })).run();
       if (usable) return { ...cached, stale: true };
-      throw new Error('Counter source unavailable');
+      throw new Error('Counter source: ' + issue);
     }
   } finally { await q(db, 'DELETE FROM leases WHERE key=? AND owner=?', KEY, owner).run(); }
 }

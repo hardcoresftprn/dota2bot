@@ -84,9 +84,9 @@ export async function miniappAPI(request, env) {
       return json({ name: user.first_name.slice(0, 80), preferences, subscribed: Boolean(chat?.active) });
     }
     return json({ error: 'Not found' }, 404);
-  } catch {
+  } catch (error) {
     console.warn('Mini App request failed');
-    return json({ error: 'Не удалось загрузить данные. Попробуйте ещё раз.' }, 503);
+    return json({ error: 'Не удалось загрузить данные. Попробуйте ещё раз.', ...(url.pathname === '/api/counters' && /^Counter source: /.test(error.message) ? { sourceIssue: error.message.slice(16) } : {}) }, 503);
   }
 }
 
