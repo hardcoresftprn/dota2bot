@@ -25,9 +25,18 @@ test('small or malformed matchup samples excluded',()=>{
  const c=normalizeCells(cells,heroes);assert.equal(c[1][2],undefined);assert.equal(c[1][3],undefined);assert.equal(c[1][4],undefined);assert.deepEqual(c[2][1],[1,51,200]);assert.throws(()=>normalizeCells({},heroes));
 });
 test('cache, stale fallback, backoff and expiration',async t=>{
- const db=new D1(),timestamp=100000;db.db.prepare('INSERT INTO meta VALUES(?,?)').run('counters:v4',JSON.stringify({...data,checkedAt:timestamp,catalogueUpdatedAt:timestamp}));
+ const db=new D1(),timestamp=100000;db.db.prepare('INSERT INTO meta VALUES(?,?)').run('counters:v5',JSON.stringify({...data,checkedAt:timestamp,catalogueUpdatedAt:timestamp}));
  let calls=0;t.mock.method(globalThis,'fetch',async()=>{calls++;throw new Error('offline');});
  assert.equal((await loadCounters(db,timestamp+100)).stale,false);assert.equal(calls,0);
  assert.equal((await loadCounters(db,timestamp+3601)).stale,true);assert.equal(calls,2);await loadCounters(db,timestamp+3602);assert.equal(calls,2);
  await assert.rejects(loadCounters(db,timestamp+3*86400));db.db.close();
+});
+test('production loads published snapshot without external requests, caches reads and flags aging data',async t=>{
+ const db=new D1(),stamp=200000;let reads=0;
+ t.mock.method(globalThis,'fetch',async()=>{throw new Error('production must use assets');});
+ const assets={fetch:async()=>{reads++;return Response.json({...data,checkedAt:stamp-7200,catalogueUpdatedAt:stamp-7200});}};
+ assert.equal((await loadCounters(db,stamp,assets)).stale,false);
+ assert.equal((await loadCounters(db,stamp+1,assets)).stale,false);assert.equal(reads,1);
+ assert.equal((await loadCounters(db,stamp+7*3600,assets)).stale,true);
+ await assert.rejects(loadCounters(db,stamp+3*86400,assets));db.db.close();
 });

@@ -38,7 +38,7 @@ export async function miniappAPI(request, env) {
       const position = Number(url.searchParams.get('position') || 1);
       if (raw && (!/^\d+(,\d+){0,4}$/.test(raw) || new Set(raw.split(',')).size !== raw.split(',').length)) return json({ error: 'Выберите от одного до пяти разных героев.' }, 400);
       if (!Number.isInteger(position) || position < 1 || position > 5) return json({ error: 'Неверная позиция.' }, 400);
-      const data = await loadCounters(env.DB);
+      const data = await loadCounters(env.DB, now(), env.ASSETS);
       const latest = await query(env.DB, "SELECT key FROM events WHERE key LIKE 'patch:%' ORDER BY published DESC LIMIT 1").first();
       data.stale ||= olderPatch(data.patch, latest?.key.slice(6)) || now() - data.catalogueUpdatedAt > 2 * 86400;
       if (!raw) return json({ heroes: data.heroes, patch: data.patch, checkedAt: data.checkedAt, stale: data.stale });

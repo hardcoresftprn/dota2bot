@@ -231,7 +231,7 @@ async function findCounters() {
       detail.append(el('p', '', `${hero.positionShare.toFixed(1).replace('.', ',')}% игр этого героя приходится на позицию ${data.role.id}. Матчапы выше рассчитаны по всем позициям и рангам.`), link('Подробнее о герое на StatsDota ↗', hero.url));
       card.append(summary, detail); box.append(card);
     }
-    const source = el('div', 'counter-source'); source.append(el('p', '', `Патч источника: ${data.patch}. Получено: ${new Date(data.checkedAt * 1000).toLocaleString('ru-RU')}. Кеш — 1 час.`), el('p', '', 'Преимущество — отклонение от обычного винрейта героя, по оценке StatsDota. Подбор усредняет его по выбранным врагам. В выборку входят герои с ≥15% игр на вашей позиции и ≥150 матчами против каждого врага.'), link('Источник и исходный подбор: StatsDota ↗', data.sourceURL)); box.append(source);
+    const source = el('div', 'counter-source'); source.append(el('p', '', `Патч источника: ${data.patch}. Получено: ${new Date(data.checkedAt * 1000).toLocaleString('ru-RU')}. Обновление — каждые 6 часов, кеш — 1 час.`), el('p', '', 'Преимущество — отклонение от обычного винрейта героя, по оценке StatsDota. Подбор усредняет его по выбранным врагам. В выборку входят герои с ≥15% игр на вашей позиции и ≥150 матчами против каждого врага.'), link('Источник и исходный подбор: StatsDota ↗', data.sourceURL)); box.append(source);
     box.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
   } catch (error) { if (!controller.signal.aborted) empty($('#counter-results'), error.message, findCounters); }
   finally { if (counter.request === controller) $('#find-counters').disabled = !counter.enemies.length; }
