@@ -7,9 +7,9 @@
   <meta name="description" content="Сильные герои на каждой позиции, разборы патчей Dota 2 и ваша мета.">
   <title>Dota Watch · Мета и патчи</title>
   <link rel="icon" href="/app/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/app/app.css?v=1">
+  <link rel="stylesheet" href="/app/app.css?v=2">
   <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
-  <script src="/app/app.js?v=1" type="module"></script>
+  <script src="/app/app.js?v=2" type="module"></script>
 </head>
 <body>
 <div class="shell">
@@ -30,6 +30,20 @@
       <div id="heroes" class="heroes" aria-live="polite" aria-busy="true"></div>
       <p id="role-hint" class="role-hint"></p>
       <div id="meta-source" class="source-card"></div>
+    </section>
+    <section id="counters-view" aria-labelledby="counters-title" hidden>
+      <div class="eyebrow">ОТВЕТ НА ВРАЖЕСКИЙ ПИК</div>
+      <h1 id="counters-title">Контрпики<span>.</span></h1>
+      <p class="intro">Один герой, связка или вся команда.<br>Подберём ответ на твою позицию.</p>
+      <div class="counter-profile"><div><span class="eyebrow">ПОЗИЦИЯ ИЗ «МОЁ»</span><h2 id="counter-position">Загружаю профиль…</h2></div><button class="text-button" id="counter-settings">Изменить ↗</button></div>
+      <div class="section-line"><h2>Вражеские герои <span id="enemy-count">0/5</span></h2><button class="text-button" id="clear-enemies">Очистить</button></div>
+      <div id="enemy-slots" class="enemy-slots" aria-label="Выбранные враги"></div>
+      <label class="search-label" for="hero-search">Найти вражеского героя</label>
+      <input id="hero-search" class="hero-search" type="search" placeholder="Имя героя: Axe, Pudge, Invoker…" autocomplete="off" maxlength="60">
+      <div id="enemy-search-results" class="enemy-search-results" aria-live="polite"></div>
+      <button id="find-counters" class="primary-button" disabled>Подобрать контрпики <span>↗</span></button>
+      <div id="counter-results" class="counter-results" aria-live="polite"></div>
+      <div class="note"><span class="note-icon">◇</span><p>Подбор сравнивает отдельные матчапы. Среднее преимущество — ориентир для выбора, а не вероятность победы против всей команды. Данные пар общие для всех рангов и позиций.</p></div>
     </section>
     <section id="patches-view" aria-labelledby="patches-title" hidden>
       <div class="eyebrow">ЧТО ИЗМЕНИЛОСЬ В ИГРЕ</div>
@@ -57,6 +71,7 @@
   </main>
   <nav class="bottom-nav" aria-label="Разделы приложения">
     <button data-tab="meta" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 5-4 7h8l-4-7Z"/></svg><span>Мета</span></button>
+    <button data-tab="counters" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 3 17 17m-1-17L3 20M4 3v5m0-5h5m11 0v5m0-5h-5M3 20h5m-5 0v-5m18 5h-5m5 0v-5"/></svg><span>Контрпики</span></button>
     <button data-tab="patches" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6V3Zm8 0v5h5M9 12h7m-7 4h7"/></svg><span>Патчи</span></button>
     <button data-tab="profile" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21v-2a7 7 0 0 1 7-5h2a7 7 0 0 1 7 5v2"/></svg><span>Моё</span></button>
   </nav>

@@ -123,10 +123,11 @@ async function loadPatches() {
 $('#refresh-patches').addEventListener('click', loadPatches);
 function syncBackButton() { if (!tg?.BackButton) return; if ($('#hero-dialog').open || state.tab !== 'meta') tg.BackButton.show(); else tg.BackButton.hide(); }
 function navigate(tab) {
-  if (!['meta', 'patches', 'profile'].includes(tab)) tab = 'meta';
-  state.tab = tab; for (const key of ['meta', 'patches', 'profile']) $(`#${key}-view`).hidden = key !== tab;
+  if (!['meta', 'counters', 'patches', 'profile'].includes(tab)) tab = 'meta';
+  state.tab = tab; for (const key of ['meta', 'counters', 'patches', 'profile']) $(`#${key}-view`).hidden = key !== tab;
   for (const node of document.querySelectorAll('[data-tab]')) { const active = node.dataset.tab === tab; node.classList.toggle('active', active); if (active) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current'); }
   if (tab === 'patches' && !state.events) loadPatches();
+  if (tab === 'counters') openCounters();
   syncBackButton(); window.scrollTo({ top: 0, behavior: 'instant' });
 }
 function go(tab) { if (location.hash.slice(1) === tab) navigate(tab); else location.hash = tab; }
@@ -150,7 +151,7 @@ $('#preferences').addEventListener('submit', async event => {
   const preferences = { position: Number($('#favorite-position').value), rank: $('#favorite-rank').value };
   try {
     if (initData) { const profile = await api('/api/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(preferences) }); state.profile = profile; }
-    remember(preferences); state.preferences = preferences; state.position = preferences.position; state.rank = preferences.rank; loadMeta();
+    remember(preferences); state.preferences = preferences; state.position = preferences.position; state.rank = preferences.rank; loadMeta(); resetCounterResults(); counterPosition();
     $('#save-status').textContent = initData ? 'Сохранено для твоего аккаунта Telegram.' : 'Сохранено на этом устройстве.'; toast('Твоя мета настроена'); tg?.HapticFeedback?.notificationOccurred('success');
   } catch (error) { $('#save-status').textContent = error.message; }
   finally { button.disabled = false; }
@@ -162,6 +163,79 @@ if (tg && initData) {
   const safeArea = () => { document.documentElement.style.setProperty('--bottom', `${Math.max(tg.safeAreaInset?.bottom || 0, tg.contentSafeAreaInset?.bottom || 0)}px`); };
   safeArea(); tg.onEvent('safeAreaChanged', safeArea); tg.onEvent('contentSafeAreaChanged', safeArea);
 }
-syncFilters(); navigate(location.hash.slice(1));
+const counter = { catalogue: null, enemies: [], request: null, loading: false };
+const counterAliases = { 1:'антимаг ам',2:'акс могул',6:'дровка тракса',11:'сф шадоу финд',12:'пл лансер фантом',14:'пудж мясник',21:'вр виндренджер',26:'лион',35:'снайпер',42:'вк леорик скелет',44:'па фантомка',46:'та ланая темпларка',74:'инвокер инвок',75:'сайленсер',93:'сларк',94:'медуза дузa',95:'тролль',99:'бристлбек брист',104:'легионка лк',114:'мк обезьяна',129:'марс' };
+const pp = n => `${n > 0 ? '+' : ''}${n.toFixed(1).replace('.', ',')} п.п.`;
+function resetCounterResults() { counter.request?.abort(); counter.request = null; $('#counter-results').replaceChildren(); $('#find-counters').disabled = !counter.enemies.length; }
+function counterPosition() { $('#counter-position').textContent = `${state.preferences.position} · ${roles[state.preferences.position - 1]}`; }
+async function openCounters() {
+  counterPosition();
+  if (counter.catalogue || counter.loading) return;
+  counter.loading = true; empty($('#enemy-search-results'), 'Загружаю героев…');
+  try { counter.catalogue = await api('/api/counters'); renderEnemyPicker(); }
+  catch (error) { empty($('#enemy-search-results'), error.message, openCounters); }
+  finally { counter.loading = false; }
+}
+function renderEnemyPicker() {
+  $('#enemy-count').textContent = `${counter.enemies.length}/5`;
+  const selected = counter.enemies.map(id => counter.catalogue.heroes.find(h => h.id === id));
+  $('#enemy-slots').replaceChildren(...selected.map(hero => {
+    const chip = el('button', 'enemy-chip'); chip.type = 'button'; chip.setAttribute('aria-label', `Убрать ${hero.name}`);
+    if (hero.image) { const image = el('img'); image.src = hero.image; image.alt = ''; chip.append(image); }
+    chip.append(el('span', '', hero.name), el('b', '', '×')); chip.addEventListener('click', () => toggleEnemy(hero.id)); return chip;
+  }));
+  if (!selected.length) $('#enemy-slots').append(el('div', 'empty-slots', 'Добавь от 1 до 5 вражеских героев'));
+  const term = $('#hero-search').value.trim().toLowerCase();
+  const found = counter.catalogue.heroes.filter(hero => {
+    const initials = hero.name.split(/[\s-]+/).map(word => word[0]).join('').toLowerCase();
+    return !term || `${hero.name} ${hero.slug} ${counterAliases[hero.id] || ''}`.toLowerCase().includes(term) || (term.length >= 2 && initials === term);
+  }).slice(0, term ? 30 : 18);
+  $('#enemy-search-results').replaceChildren(...found.map(hero => {
+    const selected = counter.enemies.includes(hero.id); const button = el('button', 'enemy-option'); button.type = 'button'; button.setAttribute('aria-pressed', String(selected)); button.setAttribute('aria-label', `${selected ? 'Убрать' : 'Добавить'} ${hero.name}`); button.disabled = counter.enemies.length === 5 && !selected;
+    if (hero.image) { const image = el('img'); image.src = hero.image; image.alt = ''; image.loading = 'lazy'; button.append(image); }
+    button.append(el('span', '', hero.name)); button.addEventListener('click', () => toggleEnemy(hero.id)); return button;
+  }));
+  if (!found.length) empty($('#enemy-search-results'), 'Герой не найден. Попробуй английское имя.');
+  $('#find-counters').disabled = !selected.length;
+}
+function toggleEnemy(id) {
+  if (counter.enemies.includes(id)) counter.enemies = counter.enemies.filter(value => value !== id);
+  else if (counter.enemies.length < 5) { counter.enemies.push(id); $('#hero-search').value = ''; }
+  resetCounterResults(); renderEnemyPicker();
+}
+$('#hero-search').addEventListener('input', () => { if (counter.catalogue) renderEnemyPicker(); });
+$('#counter-settings').addEventListener('click', () => go('profile'));
+$('#clear-enemies').addEventListener('click', () => { counter.enemies = []; $('#hero-search').value = ''; resetCounterResults(); if (counter.catalogue) renderEnemyPicker(); });
+$('#find-counters').addEventListener('click', findCounters);
+async function findCounters() {
+  if (!counter.enemies.length) return;
+  resetCounterResults(); const controller = new AbortController(); counter.request = controller; $('#find-counters').disabled = true;
+  $('#counter-results').replaceChildren(el('div', 'skeleton'));
+  const position = state.preferences.position;
+  try {
+    const data = await api(`/api/counters?enemies=${counter.enemies.join(',')}&position=${position}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(18000)]) });
+    if (controller.signal.aborted) return;
+    const box = $('#counter-results'); box.replaceChildren(el('h2', '', `Кого пикнуть: ${data.role.name}`), el('p', '', `Против: ${data.enemies.map(h => h.name).join(', ')}`));
+    if (data.stale) box.append(el('div', 'notice', 'Показаны сохранённые данные. Актуальность источника не подтверждена.'));
+    if (!data.heroes.length) { empty(box, 'Для этой позиции мало матчей против выбранного пика. Попробуй убрать одного врага или изменить позицию в «Моё».'); return; }
+    if (data.heroes[0].advantage <= 0) box.append(el('div', 'notice', 'Явного преимущества не найдено. Ниже — лучшие из доступных вариантов, но матчапы остаются сложными.'));
+    for (const hero of data.heroes) {
+      const card = el('details', 'counter-card'); const summary = el('summary');
+      if (hero.image) { const image = el('img'); image.src = hero.image; image.alt = ''; summary.append(image); }
+      const info = el('div'); info.append(el('h3', '', hero.name), el('strong', hero.advantage < 0 ? 'negative' : '', pp(hero.advantage)), el('p', '', 'среднее преимущество · подробнее ↓')); summary.append(info);
+      const detail = el('div', 'counter-detail');
+      for (const pair of hero.pairs) {
+        const enemy = data.enemies.find(h => h.id === pair.enemyId); const row = el('div', 'pair-row');
+        row.append(el('span', '', `Против ${enemy.name}`), el('b', '', pp(pair.advantage))); detail.append(row, el('div', '', `${pct(pair.winrate)} побед · ${number(pair.matches)} матчей`));
+      }
+      detail.append(el('p', '', `${hero.positionShare.toFixed(1).replace('.', ',')}% игр этого героя приходится на позицию ${data.role.id}. Матчапы выше рассчитаны по всем позициям и рангам.`), link('Подробнее о герое на StatsDota ↗', hero.url));
+      card.append(summary, detail); box.append(card);
+    }
+    const source = el('div', 'counter-source'); source.append(el('p', '', `Патч источника: ${data.patch}. Получено: ${new Date(data.checkedAt * 1000).toLocaleString('ru-RU')}. Кеш — 1 час.`), el('p', '', 'Преимущество — отклонение от обычного винрейта героя, по оценке StatsDota. Подбор усредняет его по выбранным врагам. В выборку входят герои с ≥15% игр на вашей позиции и ≥150 матчами против каждого врага.'), link('Источник и исходный подбор: StatsDota ↗', data.sourceURL)); box.append(source);
+    box.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+  } catch (error) { if (!controller.signal.aborted) empty($('#counter-results'), error.message, findCounters); }
+  finally { if (counter.request === controller) $('#find-counters').disabled = !counter.enemies.length; }
+}
+
 $('#heroes').replaceChildren(...Array.from({ length: 5 }, () => el('div', 'skeleton')));
-await loadProfile(); loadMeta();
+await loadProfile(); syncFilters(); navigate(location.hash.slice(1)); loadMeta();

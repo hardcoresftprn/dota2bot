@@ -1,3 +1,4 @@
+import { loadCounters, rankCounters } from './counters.js';
 import { loadMeta, POSITIONS, RANKS, metaURL, META_ORIGIN, isSliceStale, olderPatch } from './meta.js';
 import { now } from './content.js';
 import { HERO_IMAGES } from './hero-images.js';
@@ -32,6 +33,19 @@ export async function verifyInitData(raw, token, timestamp = now()) {
 export async function miniappAPI(request, env) {
   const url = new URL(request.url);
   try {
+    if (url.pathname === '/api/counters' && request.method === 'GET') {
+      const raw = url.searchParams.get('enemies');
+      const position = Number(url.searchParams.get('position') || 1);
+      if (raw && (!/^\d+(,\d+){0,4}$/.test(raw) || new Set(raw.split(',')).size !== raw.split(',').length)) return json({ error: 'Выберите от одного до пяти разных героев.' }, 400);
+      if (!Number.isInteger(position) || position < 1 || position > 5) return json({ error: 'Неверная позиция.' }, 400);
+      const data = await loadCounters(env.DB);
+      const latest = await query(env.DB, "SELECT key FROM events WHERE key LIKE 'patch:%' ORDER BY published DESC LIMIT 1").first();
+      data.stale ||= olderPatch(data.patch, latest?.key.slice(6)) || now() - data.catalogueUpdatedAt > 2 * 86400;
+      if (!raw) return json({ heroes: data.heroes, patch: data.patch, checkedAt: data.checkedAt, stale: data.stale });
+      const enemies = raw.split(',').map(Number);
+      if (enemies.some(id => !data.heroes.some(h => h.id === id))) return json({ error: 'Неизвестный герой.' }, 400);
+      return json(rankCounters(data, enemies, position));
+    }
     if (url.pathname === '/api/meta' && request.method === 'GET') {
       const rank = url.searchParams.get('rank') || 'all';
       const position = Number(url.searchParams.get('position') || 1);
