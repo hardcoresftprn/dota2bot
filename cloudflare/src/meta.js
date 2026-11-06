@@ -108,12 +108,16 @@ export async function loadMeta(db, rank, selected, checkedAt = now()) {
     return { role, data: value?.heroes?.length && checkedAt - value.checkedAt < MAX_CACHE_AGE ? value : null };
   });
 }
-function olderPatch(source, known) {
+export function olderPatch(source, known) {
   const parts = version => /^(\d+)\.(\d{2})([a-z]?)$/.exec(version || '');
   const a = parts(source), b = parts(known);
   if (!a || !b) return false;
   for (let i = 1; i <= 2; i++) if (Number(a[i]) !== Number(b[i])) return Number(a[i]) < Number(b[i]);
   return a[3] < b[3];
+}
+export function isSliceStale(data, knownPatch, checkedAt = now()) {
+  return Boolean(data.failedAt) || checkedAt - data.checkedAt >= CACHE_TTL || checkedAt - data.updatedAt > 2 * 86400
+    || checkedAt - Date.parse(data.sampleTo) / 1000 > 4 * 86400 || olderPatch(data.patch, knownPatch);
 }
 const number = value => Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const percent = value => value.toFixed(1).replace('.', ',') + '%';
@@ -130,8 +134,7 @@ export function renderMeta(slices, rank, selected, knownPatch, checkedAt = now()
   let anyStale = false;
   for (const { role, data } of slices) {
     if (!data) { lines.push(`<b>${role.id} · ${role.name}</b>`, 'Статистика временно недоступна.', ''); continue; }
-    const stale = Boolean(data.failedAt) || checkedAt - data.checkedAt >= CACHE_TTL || checkedAt - data.updatedAt > 2 * 86400
-      || checkedAt - Date.parse(data.sampleTo) / 1000 > 4 * 86400 || olderPatch(data.patch, knownPatch);
+    const stale = isSliceStale(data, knownPatch, checkedAt);
     anyStale ||= stale;
     if (!selected) lines.push(`<b>${role.id} · ${role.name}${stale ? ' ⚠️' : ''}</b>`);
     if (stale && selected) lines.push('⚠️ Данные устарели или обновление источника не подтверждено.');

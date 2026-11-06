@@ -55,9 +55,11 @@ try {
     { command: 'stop', description: 'Отключить рассылку' },
     { command: 'latest', description: 'Последний сохранённый разбор' },
     { command: 'meta', description: 'Мета по позициям и рангам' },
+    { command: 'app', description: 'Открыть приложение: мета и патчи' },
     { command: 'status', description: 'Подписка и проверка источников' },
     { command: 'help', description: 'Как пользоваться ботом' },
   ] });
+  await call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Открыть приложение', web_app: { url: new URL('/app/', url).toString() } } });
   await call('setWebhook', { url: target, secret_token: secret, allowed_updates: ['message', 'callback_query'], max_connections: 1, drop_pending_updates: false });
   const check = await call('getWebhookInfo', {});
   if (check.url !== target) throw new Error('Webhook not confirmed');

@@ -181,3 +181,6 @@ Telegram user ID. В группе проверяется ID автора ком�
 - [Steam News API](https://partner.steamgames.com/doc/webapi/ISteamNews)
 - [Telegram Bot API](https://core.telegram.org/bots/api)
 - [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses)
+## Приложение внутри Telegram
+
+В @dota2sds_bot нажмите «Открыть приложение» или отправьте `/app`: мета по позициям и рангам, лента разборов патчей и сохранение любимой позиции. [Устройство и запуск Mini App](docs/miniapp.md).

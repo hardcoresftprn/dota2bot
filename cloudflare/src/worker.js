@@ -1,5 +1,6 @@
 import { DOTA, STEAM, getJSON, loadPatch, newsEvent, summarize, now } from './content.js';
 import { metaReply, parseMetaArgs, parseMetaCallback, rankMenu } from './meta.js';
+import { miniappAPI, appKeyboard } from './miniapp.js';
 
 export const statement = (db, sql, ...args) => db.prepare(sql).bind(...args);
 export const getMeta = async (db, key) => (await statement(db, 'SELECT value FROM meta WHERE key=?', key).first())?.value;
@@ -171,7 +172,7 @@ export async function handleUpdate(env, update) {
       || !Number.isSafeInteger(update.update_id) || !Number.isSafeInteger(message?.chat?.id)) return;
   const commandText = callback ? 'meta' : message.text.split(/\s/)[0].slice(1);
   const [command, mention] = commandText.split('@');
-  if (!['start', 'stop', 'latest', 'status', 'help', 'meta'].includes(command)) return;
+  if (!['start', 'stop', 'latest', 'status', 'help', 'meta', 'app'].includes(command)) return;
   if (mention) {
     let username = await getMeta(env.DB, 'bot_username');
     if (!username) { username = (await telegram(env, 'getMe', {})).username; await setMeta(env.DB, 'bot_username', username); }
@@ -187,6 +188,10 @@ export async function handleUpdate(env, update) {
   const receipt = await statement(env.DB, 'INSERT OR IGNORE INTO updates(id,received) VALUES(?,?) RETURNING id', update.update_id, now()).first();
   if (!receipt) return;
   const chatID = message.chat.id;
+  if (command === 'app') {
+    await send(env, chatID, '🎮 <b>Dota Watch</b>\nМета по пяти позициям, разборы патчей и ваш любимый ранг — в одном приложении.', { reply_markup: appKeyboard(message.chat.type === 'private') });
+    return;
+  }
   if (command === 'meta') {
     const params = selection || parseMetaArgs(message.text);
     const result = params.error ? { text: params.error }
@@ -228,13 +233,23 @@ export async function handleUpdate(env, update) {
   } else {
     answer = '🎮 <b>Dota Patch Watch</b>\n\n/start — подписаться\n/stop — отписаться\n/meta — актуальная мета по пяти позициям\n/latest — запросить последний разбор\n/status — подписка и состояние источников\n\n<b>Мета</b>\nВыберите позицию и ранг кнопками под /meta. Примеры: /meta 2 — мид; /meta 1 legend — керри на Легенде. Источник StatsDota, кеш 1 час. Мета приходит только по вашему запросу.\n\nПроверяю Valve и Steam каждые 10 минут. Крупные патчи, новые герои, баланс и рейтинг. Косметика, турниры и обычные багфиксы не входят в рассылку.\n\nВ общем чате администратор отправляет /start@имя_бота. /latest повторно показывает разбор только по вашему запросу. Выводы о влиянии — оценка по примечаниям, без выдуманной статистики.';
   }
-  await send(env, chatID, answer);
+  if (command === 'help') answer += '\n\n/app — открыть приложение с метой и патчами.';
+  await send(env, chatID, answer, ['start', 'help'].includes(command) ? { reply_markup: appKeyboard(message.chat.type === 'private') } : {});
 }
 
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
     if (request.method === 'GET' && path === '/healthz') return new Response('ok\n');
+    if (path.startsWith('/api/')) return miniappAPI(request, env);
+    if (['GET', 'HEAD'].includes(request.method) && (path === '/app' || path.startsWith('/app/')) && env.ASSETS) {
+      const asset = await env.ASSETS.fetch(request);
+      const response = new Response(asset.body, asset);
+      response.headers.set('X-Content-Type-Options', 'nosniff');
+      response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      response.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https://cdn.cloudflare.steamstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'");
+      return response;
+    }
     if (request.method !== 'POST' || path !== '/telegram') return new Response('Not found', { status: 404 });
     if (!env.TELEGRAM_WEBHOOK_SECRET || request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== env.TELEGRAM_WEBHOOK_SECRET) return new Response('Forbidden', { status: 403 });
     const body = await request.text();
