@@ -2,7 +2,7 @@ import { POSITIONS } from './meta.js';
 import { HERO_IMAGES } from './hero-images.js';
 import { now } from './content.js';
 const q = (db, sql, ...args) => db.prepare(sql).bind(...args);
-const KEY = 'counters:v3';
+const KEY = 'counters:v4';
 const TTL = 3600, MAX_AGE = 2 * 86400;
 export const SOURCE = 'https://statsdota.com/en/counters/team';
 
@@ -36,6 +36,22 @@ export function normalizeCells(cells, heroes) {
   if (Object.values(result).filter(row => Object.keys(row).length > 20).length < 80) throw new Error('Counter sample too small');
   return result;
 }
+async function readPublicData(response, parse, label) {
+  const reader = response.body.getReader(), decoder = new TextDecoder();
+  let text = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (value) text += decoder.decode(value, { stream: true });
+      if (text.length > 1500000) throw new Error('Counter HTTP oversized ' + label);
+      try {
+        const data = parse(text);
+        reader.cancel().catch(() => {});
+        return data;
+      } catch { if (done) throw new Error('Counter HTTP invalid ' + label); }
+    }
+  } catch (error) { throw new Error('Counter HTTP ' + label + ' ' + error.name + ' bytes=' + text.length); }
+}
 export async function loadCounters(db, timestamp = now()) {
   let cached;
   try { cached = JSON.parse((await q(db, 'SELECT value FROM meta WHERE key=?', KEY).first())?.value); } catch { /* Empty cache. */ }
@@ -49,8 +65,8 @@ export async function loadCounters(db, timestamp = now()) {
     try {
       const [page, response] = await Promise.all([fetch(SOURCE, { signal: AbortSignal.timeout(30000) }).catch(() => { throw new Error('Counter HTTP catalogue timeout'); }), fetch('https://statsdota.com/api/counter-cells', { signal: AbortSignal.timeout(30000), headers: { Accept: 'application/json' } }).catch(() => { throw new Error('Counter HTTP matchups timeout'); })]);
       if (!page.ok || !response.ok) throw new Error(`Counter HTTP ${page.status}/${response.status}`);
-      const catalogue = parseCounterPage(await page.text());
-      const cells = normalizeCells((await response.json()).cells, catalogue.heroes);
+      const [catalogue, pairs] = await Promise.all([readPublicData(page, parseCounterPage, 'catalogue'), readPublicData(response, JSON.parse, 'matchups')]);
+      const cells = normalizeCells(pairs.cells, catalogue.heroes);
       const value = { ...catalogue, cells, checkedAt: timestamp };
       await q(db, 'INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', KEY, JSON.stringify(value)).run();
       return { ...value, stale: false };
