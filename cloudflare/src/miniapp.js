@@ -2,6 +2,11 @@ import { loadCounters, rankCounters } from './counters.js';
 import { loadMeta, POSITIONS, RANKS, metaURL, META_ORIGIN, isSliceStale, olderPatch } from './meta.js';
 import { now } from './content.js';
 import { HERO_IMAGES } from './hero-images.js';
+import { analyzeMatch, analyzePlayer } from './analysis.js';
+import { heroBuild, heroBuildContext, itemCatalogue, counterItems } from './builds.js';
+import { steamAccount, startSteam, finishSteam, unlinkSteam, steamResult } from './steam.js';
+import { DataError } from './dota-data.js';
+import names from './names.js';
 
 const query = (db, sql, ...args) => db.prepare(sql).bind(...args);
 const encoder = new TextEncoder();
@@ -33,6 +38,38 @@ export async function verifyInitData(raw, token, timestamp = now()) {
 export async function miniappAPI(request, env) {
   const url = new URL(request.url);
   try {
+    if (url.pathname === '/api/heroes' && request.method === 'GET') return json({ heroes: Object.entries(names.heroes).map(([id, name]) => ({ id: Number(id), name, image: HERO_IMAGES[id] || null })).sort((a, b) => a.name.localeCompare(b.name)) });
+    if (url.pathname === '/api/counter-items' && request.method === 'GET') {
+      const raw = url.searchParams.get('enemies') || '';
+      const position = Number(url.searchParams.get('position') || 1), enemies = raw.split(',').map(Number);
+      if (!/^\d+(,\d+){0,4}$/.test(raw) || new Set(enemies).size !== enemies.length || enemies.some(id => !Object.hasOwn(names.heroes, id)) || !Number.isInteger(position) || position < 1 || position > 5) return json({ error: 'Выберите от одного до пяти разных героев и позицию.' }, 400);
+      const catalogue = await itemCatalogue(env);
+      return json({ items: counterItems(catalogue, enemies, position), itemsUpdatedAt: catalogue.fetchedAt, itemsStale: now() - catalogue.fetchedAt > 3 * 86400 });
+    }
+    if (url.pathname === '/api/steam/callback' && request.method === 'GET') {
+      try { await finishSteam(request, env.DB); return steamResult('Steam подтверждён и привязан к вашему аккаунту Telegram.', true); }
+      catch { return steamResult('Вернитесь в приложение и начните подключение заново. Подтверждение Steam отменено, истекло или не прошло проверку.'); }
+    }
+    if (url.pathname.startsWith('/api/steam/') && ['GET', 'POST'].includes(request.method)) {
+      if (request.method === 'POST' && request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return json({ error: 'Forbidden' }, 403);
+      const user = await verifyInitData(request.headers.get('X-Telegram-Init-Data'), env.TELEGRAM_BOT_TOKEN);
+      if (!user) return json({ error: 'Откройте приложение заново через Telegram, чтобы подключить Steam.' }, 401);
+      const allowed = String(env.ALLOWED_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
+      if (allowed.length && !allowed.includes(String(user.id))) return json({ error: 'Нет доступа.' }, 403);
+      if (url.pathname === '/api/steam/status' && request.method === 'GET') return json({ steam: await steamAccount(env.DB, user.id) });
+      if (url.pathname === '/api/steam/start' && request.method === 'POST') return json(await startSteam(env.DB, user.id, url.origin));
+      if (url.pathname === '/api/steam/unlink' && request.method === 'POST') { await unlinkSteam(env.DB, user.id); return json({ steam: null }); }
+      return json({ error: 'Not found' }, 404);
+    }
+    if (url.pathname === '/api/analysis/player' && request.method === 'GET') return json(await analyzePlayer(env.DB, url.searchParams.get('id')));
+    if (url.pathname === '/api/analysis/match' && request.method === 'GET') return json(await analyzeMatch(env.DB, url.searchParams.get('id')));
+    if (['/api/build', '/api/build-context'].includes(url.pathname) && request.method === 'GET') {
+      const raw = url.searchParams.get('enemies');
+      const enemies = raw ? raw.split(',').map(Number) : [];
+      const position = Number(url.searchParams.get('position') || 1);
+      if ((raw && !/^\d+(,\d+){0,4}$/.test(raw)) || new Set(enemies).size !== enemies.length || enemies.some(id => !Object.hasOwn(names.heroes, id)) || !Number.isInteger(position) || position < 1 || position > 5) return json({ error: 'Неверный список врагов или позиция.' }, 400);
+      return json(await (url.pathname === '/api/build-context' ? heroBuildContext : heroBuild)(env, url.searchParams.get('hero'), enemies, position));
+    }
     if (url.pathname === '/api/counters' && request.method === 'GET') {
       const raw = url.searchParams.get('enemies');
       const position = Number(url.searchParams.get('position') || 1);
@@ -44,7 +81,15 @@ export async function miniappAPI(request, env) {
       if (!raw) return json({ heroes: data.heroes, patch: data.patch, checkedAt: data.checkedAt, stale: data.stale });
       const enemies = raw.split(',').map(Number);
       if (enemies.some(id => !data.heroes.some(h => h.id === id))) return json({ error: 'Неизвестный герой.' }, 400);
-      return json(rankCounters(data, enemies, position));
+      const result = rankCounters(data, enemies, position);
+      try {
+        const catalogue = await itemCatalogue(env);
+        result.items = counterItems(catalogue, enemies, position);
+        result.itemsUpdatedAt = catalogue.fetchedAt;
+        result.itemsStale = now() - catalogue.fetchedAt > 3 * 86400;
+      } catch { result.items = []; result.itemsIssue = 'Каталог предметов временно недоступен.'; }
+      result.itemsNotice = 'Ситуационные советы по механикам, а не статистический рейтинг. Приоритет учитывает позицию и число выбранных врагов. Покупка зависит от героя, тайминга и предметов противника.';
+      return json(result);
     }
     if (url.pathname === '/api/meta' && request.method === 'GET') {
       const rank = url.searchParams.get('rank') || 'all';
@@ -85,6 +130,7 @@ export async function miniappAPI(request, env) {
     }
     return json({ error: 'Not found' }, 404);
   } catch (error) {
+    if (error instanceof DataError) return json({ error: error.message, ...(error.clientFallback ? { clientFallback: true } : {}) }, error.status);
     console.warn('Mini App request failed');
     return json({ error: 'Не удалось загрузить данные. Попробуйте ещё раз.', ...(url.pathname === '/api/counters' && /^Counter source: /.test(error.message) ? { sourceIssue: error.message.slice(16) } : {}) }, 503);
   }

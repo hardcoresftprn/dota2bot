@@ -28,3 +28,7 @@
 в коде проекта. Их можно изменить отдельным обновлением.
 
 Официальная справка: [Telegram BotFather](https://core.telegram.org/bots/features#botfather).
+
+## Кнопка запуска приложения
+
+Кнопка меню «Открыть» настраивается через `setup-telegram.js --menu-only`. Для кнопки запуска в профиле и списке чатов включите **Main Mini App** в BotFather и укажите `https://dota2bot.sdsbtw.workers.dev/app/`. [Инструкция Telegram](https://core.telegram.org/bots/webapps#launching-the-main-mini-app). Это отдельная настройка от кнопки меню.

@@ -3,24 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#101312">
-  <meta name="description" content="Сильные герои на каждой позиции, разборы патчей Dota 2 и ваша мета.">
-  <title>Dota Watch · Мета и патчи</title>
+  <meta name="theme-color" content="#101115">
+  <meta name="description" content="sds DOTA: мета, сборки героев, контрпики и предметы, анализ матчей и профилей, подключение Steam.">
+  <title>sds DOTA · Твоя игра начинается здесь</title>
   <link rel="icon" href="/app/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/app/app.css?v=2">
+  <link rel="stylesheet" href="/app/app.css?v=3">
   <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
-  <script src="/app/app.js?v=2" type="module"></script>
+  <script src="/app/app.js?v=4" type="module"></script>
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
-    <a class="brand" href="#meta" aria-label="Dota Watch — мета"><img src="/app/icon.svg" width="32" height="32" alt=""><span>DOTA<span class="brand-light">WATCH</span></span></a>
+    <a class="brand" href="#meta" aria-label="sds DOTA — мета"><img src="/app/icon.svg" width="36" height="36" alt=""><span><b class="brand-prefix">sds</b> DOTA<small>ТВОЯ ИГРА. ТВОИ ПРАВИЛА.</small></span></a>
     <button class="patch-pill" id="patch-shortcut" aria-label="Открыть разборы патчей"><span class="live-dot"></span><span id="patch-label">DOTA 2</span><span aria-hidden="true">↗</span></button>
   </header>
   <main id="main">
     <section id="meta-view" aria-labelledby="meta-title">
-      <div class="eyebrow">ТВОЙ СЛЕДУЮЩИЙ ПИК</div>
-      <div class="title-line"><h1 id="meta-title">Играй по мете<span>.</span></h1><span class="title-mark" aria-hidden="true">↗</span></div>
+      <div class="eyebrow">01 / ПРЕИМУЩЕСТВО ДО ПЕРВОГО КРИПА</div>
+      <div class="title-line"><h1 id="meta-title">Твой следующий<br>сильный пик<span>.</span></h1><span class="title-mark" aria-hidden="true">↗</span></div>
       <p class="intro">Сильные герои для каждой позиции.<br>Выбирай под свой ранг и стиль игры.</p>
       <div class="filter-label"><span>ПОЗИЦИЯ</span><span id="role-description">1 · Керри</span></div>
       <div class="roles" id="roles" role="group" aria-label="Позиция"></div>
@@ -34,16 +34,39 @@
     <section id="counters-view" aria-labelledby="counters-title" hidden>
       <div class="eyebrow">ОТВЕТ НА ВРАЖЕСКИЙ ПИК</div>
       <h1 id="counters-title">Контрпики<span>.</span></h1>
-      <p class="intro">Один герой, связка или вся команда.<br>Подберём ответ на твою позицию.</p>
+      <p class="intro">Один герой, связка или вся команда.<br>Контрпики и предметы против вражеских механик.</p>
       <div class="counter-profile"><div><span class="eyebrow">ПОЗИЦИЯ ИЗ «МОЁ»</span><h2 id="counter-position">Загружаю профиль…</h2></div><button class="text-button" id="counter-settings">Изменить ↗</button></div>
       <div class="section-line"><h2>Вражеские герои <span id="enemy-count">0/5</span></h2><button class="text-button" id="clear-enemies">Очистить</button></div>
       <div id="enemy-slots" class="enemy-slots" aria-label="Выбранные враги"></div>
       <label class="search-label" for="hero-search">Найти вражеского героя</label>
       <input id="hero-search" class="hero-search" type="search" placeholder="Имя героя: Axe, Pudge, Invoker…" autocomplete="off" maxlength="60">
       <div id="enemy-search-results" class="enemy-search-results" aria-live="polite"></div>
-      <button id="find-counters" class="primary-button" disabled>Подобрать контрпики <span>↗</span></button>
+      <button id="find-counters" class="primary-button" disabled>Подобрать героев и предметы <span>↗</span></button>
       <div id="counter-results" class="counter-results" aria-live="polite"></div>
       <div class="note"><span class="note-icon">◇</span><p>Подбор сравнивает отдельные матчапы. Среднее преимущество — ориентир для выбора, а не вероятность победы против всей команды. Данные пар общие для всех рангов и позиций.</p></div>
+    </section>
+    <section id="builds-view" aria-labelledby="builds-title" hidden>
+      <div class="eyebrow">03 / КАЖДЫЙ СЛОТ ИМЕЕТ ЗНАЧЕНИЕ</div>
+      <h1 id="builds-title">Собери<br>преимущество<span>.</span></h1>
+      <p class="intro">Популярные покупки профессионалов по стадиям игры.<br>Ситуационные предметы — под выбранных врагов.</p>
+      <label class="search-label" for="build-search">Найди своего героя</label>
+      <input id="build-search" class="hero-search" type="search" placeholder="Например, Invoker или инвокер" maxlength="60" autocomplete="off">
+      <div id="build-heroes" class="enemy-search-results" aria-live="polite"></div>
+      <div class="counter-profile build-context"><div><span class="eyebrow">ВРАГИ ИЗ РАЗДЕЛА «КОНТРПИКИ»</span><p id="build-enemy-context">Враги не выбраны</p></div><button class="text-button" id="build-edit-enemies">Выбрать ↗</button></div>
+      <div id="build-results" aria-live="polite"><div class="empty"><p>Выбери героя, чтобы увидеть предметы по стадиям игры.</p></div></div>
+    </section>
+    <section id="analysis-view" aria-labelledby="analysis-title" hidden>
+      <div class="eyebrow">04 / ПОСМОТРИ НА ИГРУ ГЛУБЖЕ</div>
+      <h1 id="analysis-title">Цифры.<br>Выводы. Следующий шаг<span>.</span></h1>
+      <p class="intro">Разбор матча и открытой истории игрока.<br>Статистика OpenDota с объяснениями.</p>
+      <div class="analysis-switch" role="group" aria-label="Тип анализа"><button id="analysis-player-tab" type="button" aria-pressed="true">Профиль / смурф</button><button id="analysis-match-tab" type="button" aria-pressed="false">Матч</button></div>
+      <form id="analysis-form" class="analysis-form">
+        <label class="search-label" id="analysis-input-label" for="analysis-id">Dota ID, SteamID64 или ссылка на числовой Steam-профиль</label>
+        <input id="analysis-id" class="hero-search" type="text" placeholder="Например, 70388657" required maxlength="150" autocomplete="off">
+        <button id="analyze-submit" class="primary-button" type="submit">Разобрать профиль <span>↗</span></button>
+      </form>
+      <div id="analysis-results" aria-live="polite"></div>
+      <div class="note"><span class="note-icon">◇</span><p>Признаки смурфа — объяснимая эвристика по доступным рейтинговым матчам. Это не вероятность, доказательство или основание для обвинения. Для закрытой истории вывод может быть недоступен.</p></div>
     </section>
     <section id="patches-view" aria-labelledby="patches-title" hidden>
       <div class="eyebrow">ЧТО ИЗМЕНИЛОСЬ В ИГРЕ</div>
@@ -58,6 +81,7 @@
       <h1 id="profile-title">Моё<span>.</span></h1>
       <p class="intro" id="profile-greeting">Настрой мету под себя.</p>
       <div class="profile-card"><div class="profile-avatar" aria-hidden="true">◇</div><div><h2 id="profile-name">Твой игровой профиль</h2><p id="profile-mode">Выбор сохраняется на этом устройстве</p></div></div>
+      <div class="steam-card"><div class="section-line"><span class="eyebrow">STEAM / ПОДКЛЮЧЕНИЕ</span><span class="connection-dot" id="steam-badge">Не подключён</span></div><h2 id="steam-title">Твой Steam. Твоя статистика.</h2><p id="steam-description">Подключи аккаунт через официальный вход Steam и открывай свой анализ в одно нажатие.</p><button id="connect-steam" class="primary-button">Подключить Steam <span>↗</span></button><button id="check-steam" class="text-button">Проверить подключение ↻</button><div id="steam-actions" class="steam-actions" hidden><button id="analyze-own" class="outline-button">Моя статистика ↗</button><button id="unlink-steam" class="text-button">Отключить Steam</button></div><p id="steam-status" class="save-status" role="status"></p></div>
       <form id="preferences" class="preferences">
         <h2>С чего начнём в следующий раз?</h2>
         <label for="favorite-position">Любимая позиция</label><select id="favorite-position"></select>
@@ -72,7 +96,8 @@
   <nav class="bottom-nav" aria-label="Разделы приложения">
     <button data-tab="meta" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 5-4 7h8l-4-7Z"/></svg><span>Мета</span></button>
     <button data-tab="counters" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 3 17 17m-1-17L3 20M4 3v5m0-5h5m11 0v5m0-5h-5M3 20h5m-5 0v-5m18 5h-5m5 0v-5"/></svg><span>Контрпики</span></button>
-    <button data-tab="patches" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6V3Zm8 0v5h5M9 12h7m-7 4h7"/></svg><span>Патчи</span></button>
+    <button data-tab="builds" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg><span>Сборки</span></button>
+    <button data-tab="analysis" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10m5 10V4m5 16v-7m5 7V8M2 21h20"/></svg><span>Анализ</span></button>
     <button data-tab="profile" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21v-2a7 7 0 0 1 7-5h2a7 7 0 0 1 7 5v2"/></svg><span>Моё</span></button>
   </nav>
 </div>

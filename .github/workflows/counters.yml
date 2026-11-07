@@ -18,11 +18,12 @@ jobs:
         with:
           node-version: '24'
       - run: node cloudflare/scripts/refresh-counters.js
+      - run: node cloudflare/scripts/refresh-items.js
       - name: Save updated public statistics
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add cloudflare/public/counter-data.json
+          git add cloudflare/public/counter-data.json cloudflare/public/item-data.json
           if ! git diff --cached --quiet; then
             git commit -m 'Refresh public counter matchup data'
             git push origin HEAD:main

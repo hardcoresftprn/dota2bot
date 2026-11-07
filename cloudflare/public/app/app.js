@@ -1,3 +1,4 @@
+import { clientPublicData } from './public-data.js?v=4';
 const $ = selector => document.querySelector(selector);
 const roles = ['Керри', 'Мид', 'Оффлейн', 'Поддержка', 'Полная поддержка'];
 const shortRoles = ['Керри', 'Мид', 'Оффлейн', 'Саппорт', 'Хард сап'];
@@ -15,10 +16,13 @@ try { const value = JSON.parse(localStorage.getItem('dota-watch-preferences')); 
 state.position = state.preferences.position; state.rank = state.preferences.rank;
 function remember(value) { try { localStorage.setItem('dota-watch-preferences', JSON.stringify(value)); } catch { /* Account preferences are also stored on the server. */ } }
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, signal: options.signal || AbortSignal.timeout(18000), headers: { ...options.headers, ...(path === '/api/profile' ? { 'X-Telegram-Init-Data': initData } : {}) } });
+  const response = await fetch(path, { ...options, signal: options.signal || AbortSignal.timeout(18000), headers: { ...options.headers, ...((path === '/api/profile' || path.startsWith('/api/steam/')) ? { 'X-Telegram-Init-Data': initData } : {}) } });
   let data;
   try { data = await response.json(); } catch { throw new Error('Не удалось загрузить данные. Проверьте соединение.'); }
-  if (!response.ok) throw new Error(data.error || 'Не удалось загрузить данные.');
+  if (!response.ok) {
+    if (response.status === 429 && data.clientFallback === true) return clientPublicData(path, { signal: options.signal });
+    throw new Error(data.error || 'Не удалось загрузить данные.');
+  }
   return data;
 }
 function toast(text) { $('#toast').textContent = text; $('#toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { $('#toast').hidden = true; }, 2600); }
@@ -83,6 +87,8 @@ function showHero(hero, data) {
   const title = el('h2', '', hero.name); title.id = 'hero-dialog-title'; body.append(title);
   const stats = el('div', 'detail-stats'); for (const [value, label] of [[pct(hero.winrate), 'побед'], [pct(hero.pickRate), 'пиков'], [hero.score + '/100', 'рейтинг']]) { const stat = el('div'); stat.append(el('strong', '', value), el('span', '', label)); stats.append(stat); }
   body.append(stats, el('p', '', `${number(hero.matches)} матчей за ${date(data.sampleFrom)} — ${date(data.sampleTo)}. Тир ${hero.tier}, патч ${data.patch}. ${data.stale ? 'Данные могут быть устаревшими. ' : ''}${data.fallback ? 'Источник использовал расширенную выборку. ' : ''}`), el('p', '', data.role.hint), link('Статистика героя на StatsDota ↗', hero.url, 'outline-button'));
+  const build = el('button', 'primary-button', 'Сборка и ситуационные предметы ↗');
+  build.addEventListener('click', () => { $('#hero-dialog').close(); go('builds'); loadBuild(hero.heroId); }); body.append(build);
   detail.append(body); $('#hero-dialog').showModal(); syncBackButton(); tg?.HapticFeedback?.selectionChanged();
 }
 $('#hero-dialog .dialog-close').addEventListener('click', () => $('#hero-dialog').close());
@@ -123,11 +129,13 @@ async function loadPatches() {
 $('#refresh-patches').addEventListener('click', loadPatches);
 function syncBackButton() { if (!tg?.BackButton) return; if ($('#hero-dialog').open || state.tab !== 'meta') tg.BackButton.show(); else tg.BackButton.hide(); }
 function navigate(tab) {
-  if (!['meta', 'counters', 'patches', 'profile'].includes(tab)) tab = 'meta';
-  state.tab = tab; for (const key of ['meta', 'counters', 'patches', 'profile']) $(`#${key}-view`).hidden = key !== tab;
+  if (!['meta', 'counters', 'builds', 'analysis', 'patches', 'profile'].includes(tab)) tab = 'meta';
+  state.tab = tab; for (const key of ['meta', 'counters', 'builds', 'analysis', 'patches', 'profile']) $(`#${key}-view`).hidden = key !== tab;
   for (const node of document.querySelectorAll('[data-tab]')) { const active = node.dataset.tab === tab; node.classList.toggle('active', active); if (active) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current'); }
   if (tab === 'patches' && !state.events) loadPatches();
   if (tab === 'counters') openCounters();
+  if (tab === 'builds') openBuilds();
+  if (tab === 'profile') loadSteam();
   syncBackButton(); window.scrollTo({ top: 0, behavior: 'instant' });
 }
 function go(tab) { if (location.hash.slice(1) === tab) navigate(tab); else location.hash = tab; }
@@ -158,7 +166,7 @@ $('#preferences').addEventListener('submit', async event => {
 });
 if (tg && initData) {
   tg.ready(); tg.expand();
-  try { tg.setHeaderColor('#101312'); tg.setBackgroundColor('#101312'); if (tg.isVersionAtLeast('7.10')) tg.setBottomBarColor('#161c17'); } catch { /* Native colors on older clients. */ }
+  try { tg.setHeaderColor('#101115'); tg.setBackgroundColor('#101115'); if (tg.isVersionAtLeast('7.10')) tg.setBottomBarColor('#18191f'); } catch { /* Native colors on older clients. */ }
   tg.BackButton?.onClick(() => { if ($('#hero-dialog').open) $('#hero-dialog').close(); else go('meta'); });
   const safeArea = () => { document.documentElement.style.setProperty('--bottom', `${Math.max(tg.safeAreaInset?.bottom || 0, tg.contentSafeAreaInset?.bottom || 0)}px`); };
   safeArea(); tg.onEvent('safeAreaChanged', safeArea); tg.onEvent('contentSafeAreaChanged', safeArea);
@@ -173,7 +181,10 @@ async function openCounters() {
   if (counter.catalogue || counter.loading) return;
   counter.loading = true; empty($('#enemy-search-results'), 'Загружаю героев…');
   try { counter.catalogue = await api('/api/counters', { signal: AbortSignal.timeout(45000) }); renderEnemyPicker(); }
-  catch (error) { empty($('#enemy-search-results'), error.message, openCounters); }
+  catch (error) {
+    try { counter.catalogue = await api('/api/heroes'); renderEnemyPicker(); toast('Матчапы недоступны; можно подобрать предметы'); }
+    catch { empty($('#enemy-search-results'), error.message, openCounters); }
+  }
   finally { counter.loading = false; }
 }
 function renderEnemyPicker() {
@@ -217,8 +228,8 @@ async function findCounters() {
     if (controller.signal.aborted) return;
     const box = $('#counter-results'); box.replaceChildren(el('h2', '', `Кого пикнуть: ${data.role.name}`), el('p', '', `Против: ${data.enemies.map(h => h.name).join(', ')}`));
     if (data.stale) box.append(el('div', 'notice', 'Показаны сохранённые данные. Актуальность источника не подтверждена.'));
-    if (!data.heroes.length) { empty(box, 'Для этой позиции мало матчей против выбранного пика. Попробуй убрать одного врага или изменить позицию в «Моё».'); return; }
-    if (data.heroes[0].advantage <= 0) box.append(el('div', 'notice', 'Явного преимущества не найдено. Ниже — лучшие из доступных вариантов, но матчапы остаются сложными.'));
+    if (!data.heroes.length) box.append(el('div', 'notice', 'Для этой позиции мало матчей против выбранного пика. Ниже — доступные контрпредметы.'));
+    if (data.heroes[0]?.advantage <= 0) box.append(el('div', 'notice', 'Явного преимущества не найдено. Ниже — лучшие из доступных вариантов, но матчапы остаются сложными.'));
     for (const hero of data.heroes) {
       const card = el('details', 'counter-card'); const summary = el('summary');
       if (hero.image) { const image = el('img'); image.src = hero.image; image.alt = ''; summary.append(image); }
@@ -231,11 +242,194 @@ async function findCounters() {
       detail.append(el('p', '', `${hero.positionShare.toFixed(1).replace('.', ',')}% игр этого героя приходится на позицию ${data.role.id}. Матчапы выше рассчитаны по всем позициям и рангам.`), link('Подробнее о герое на StatsDota ↗', hero.url));
       card.append(summary, detail); box.append(card);
     }
+    renderCounterItems(box, data);
     const source = el('div', 'counter-source'); source.append(el('p', '', `Патч источника: ${data.patch}. Получено: ${new Date(data.checkedAt * 1000).toLocaleString('ru-RU')}. Обновление — каждые 6 часов, кеш — 1 час.`), el('p', '', 'Преимущество — отклонение от обычного винрейта героя, по оценке StatsDota. Подбор усредняет его по выбранным врагам. В выборку входят герои с ≥15% игр на вашей позиции и ≥150 матчами против каждого врага.'), link('Источник и исходный подбор: StatsDota ↗', data.sourceURL)); box.append(source);
     box.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
-  } catch (error) { if (!controller.signal.aborted) empty($('#counter-results'), error.message, findCounters); }
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      empty($('#counter-results'), error.message, findCounters);
+      try {
+        const items = await api(`/api/counter-items?enemies=${counter.enemies.join(',')}&position=${position}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(18000)]) });
+        if (!controller.signal.aborted) renderCounterItems($('#counter-results'), items);
+      } catch { /* Keep the original source error visible. */ }
+    }
+  }
   finally { if (counter.request === controller) $('#find-counters').disabled = !counter.enemies.length; }
 }
+
+function itemCard(item, compact = false) {
+  const card = el(compact ? 'div' : 'details', compact ? 'build-item' : 'item-card');
+  const heading = el(compact ? 'div' : 'summary', 'item-heading');
+  const image = el('img'); image.src = item.image; image.alt = ''; image.loading = 'lazy';
+  image.addEventListener('error', () => { image.hidden = true; });
+  const text = el('div'); text.append(el('strong', '', item.name), el('small', '', `${number(item.cost)} золота${compact ? ` · ${number(item.purchases)} покупок` : ''}`));
+  heading.append(image, text); card.append(heading);
+  if (!compact) {
+    const body = el('div', 'item-body');
+    body.append(el('p', 'item-against', `Против: ${item.against.map(hero => hero.name).join(', ')}`), el('p', '', item.reason), el('p', '', `Когда: ${item.timing}`), el('p', 'item-caveat', item.caveat));
+    if (!item.roleFit) body.append(el('p', 'item-caveat', 'Обычно покупается на другой позиции. Согласуй с командой.'));
+    card.append(body);
+  }
+  return card;
+}
+function renderCounterItems(container, data) {
+  const section = el('div', 'items-section'); section.append(el('div', 'eyebrow', 'ОТВЕТ НЕ ТОЛЬКО В ПИКЕ'), el('h2', '', 'Предметы против этого драфта'));
+  section.append(el('p', 'data-note', data.itemsNotice || 'Ситуационные советы по механикам. Учитывай своего героя, тайминг и инвентарь противника.'));
+  if (data.itemsStale) section.append(el('div', 'notice', 'Каталог предметов давно не обновлялся. Проверьте стоимость и механику в клиенте Dota 2.'));
+  if (data.items?.length) section.append(...data.items.map(item => itemCard(item)));
+  else section.append(el('p', 'data-note', data.itemsIssue || 'Для выбранных героев нет конкретного совета в текущем справочнике. Это не значит, что контрпредметов нет.'));
+  if (data.itemsUpdatedAt) section.append(el('p', 'data-note', `Каталог: ${date(data.itemsUpdatedAt)}. Раскрой предмет, чтобы увидеть условия применения.`));
+  container.append(section);
+}
+const builds = { heroes: null, loading: false, selected: null, request: null, context: '' };
+async function openBuilds() {
+  $('#build-enemy-context').textContent = counter.enemies.length ? counter.enemies.map(id => counter.catalogue?.heroes.find(h => h.id === id)?.name || id).join(', ') : 'Враги не выбраны';
+  if (builds.selected && builds.context !== `${counter.enemies}:${state.preferences.position}`) loadBuild(builds.selected);
+  if (builds.heroes || builds.loading) return;
+  builds.loading = true;
+  try { builds.heroes = (await api('/api/heroes')).heroes; renderBuildPicker(); }
+  catch (error) { empty($('#build-heroes'), error.message, openBuilds); }
+  finally { builds.loading = false; }
+}
+function renderBuildPicker() {
+  const term = $('#build-search').value.trim().toLowerCase();
+  const heroes = builds.heroes.filter(h => `${h.name} ${counterAliases[h.id] || ''}`.toLowerCase().includes(term)).slice(0, term ? 30 : 12);
+  $('#build-heroes').replaceChildren(...heroes.map(hero => {
+    const button = el('button', 'enemy-option'); button.type = 'button'; button.setAttribute('aria-pressed', String(builds.selected === hero.id));
+    if (hero.image) { const img = el('img'); img.src = hero.image; img.alt = ''; img.loading = 'lazy'; button.append(img); }
+    button.append(el('span', '', hero.name)); button.addEventListener('click', () => loadBuild(hero.id)); return button;
+  }));
+  if (!heroes.length) empty($('#build-heroes'), 'Герой не найден. Попробуй английское имя.');
+}
+async function loadBuild(id) {
+  builds.request?.abort(); const controller = new AbortController(); builds.request = controller; builds.selected = Number(id);
+  builds.context = `${counter.enemies}:${state.preferences.position}`;
+  if (builds.heroes) renderBuildPicker();
+  const box = $('#build-results'); box.replaceChildren(el('div', 'skeleton'));
+  try {
+    const data = await api(`/api/build?hero=${id}&position=${state.preferences.position}&enemies=${counter.enemies.join(',')}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(18000)]) });
+    if (controller.signal.aborted) return;
+    box.replaceChildren(); const hero = el('div', 'build-hero');
+    if (data.hero.image) { const image = el('img'); image.src = data.hero.image; image.alt = ''; hero.append(image); }
+    const title = el('div'); title.append(el('div', 'eyebrow', 'ПОПУЛЯРНЫЕ ПОКУПКИ / OPENDOTA'), el('h2', '', data.hero.name)); hero.append(title); box.append(hero);
+    if (data.stale || data.catalogueStale) box.append(el('div', 'notice', 'Показаны сохранённые данные. Актуальность сборки или каталога предметов не подтверждена.'));
+    const grid = el('div', 'build-stages');
+    for (const [index, stage] of data.stages.entries()) {
+      const section = el('section', 'build-stage'); const heading = el('h3'); heading.append(el('span', '', `0${index + 1}`), document.createTextNode(stage.title)); section.append(heading);
+      section.append(...stage.items.map(item => itemCard(item, true)));
+      if (!stage.items.length) section.append(el('p', 'data-note', 'У источника нет покупок для этой стадии.'));
+      grid.append(section);
+    }
+    box.append(grid, el('p', 'data-note', data.notice), el('p', 'data-note', `Получено: ${new Date(data.fetchedAt * 1000).toLocaleString('ru-RU')}. Обновление — раз в 6 часов.`), link('Источник: OpenDota ↗', data.sourceURL, 'text-link'));
+    if (counter.enemies.length) renderCounterItems(box, { items: data.situational, itemsUpdatedAt: data.catalogueAt, itemsStale: data.catalogueStale });
+  } catch (error) { if (!controller.signal.aborted) empty(box, error.message, () => loadBuild(id)); }
+}
+$('#build-search').addEventListener('input', () => { if (builds.heroes) renderBuildPicker(); });
+$('#build-edit-enemies').addEventListener('click', () => go('counters'));
+
+let analysisType = 'player', analysisRequest;
+function setAnalysisType(type) {
+  analysisRequest?.abort(); $('#analyze-submit').disabled = false; analysisType = type;
+  $('#analysis-player-tab').setAttribute('aria-pressed', String(type === 'player')); $('#analysis-match-tab').setAttribute('aria-pressed', String(type === 'match'));
+  $('#analysis-input-label').textContent = type === 'match' ? 'Числовой ID матча' : 'Dota ID, SteamID64 или ссылка на числовой Steam-профиль';
+  $('#analysis-id').value = ''; $('#analysis-id').placeholder = type === 'match' ? 'Например, 9078644458' : 'Например, 70388657';
+  $('#analysis-id').inputMode = type === 'match' ? 'numeric' : 'text';
+  $('#analyze-submit').textContent = type === 'match' ? 'Разобрать матч ↗' : 'Разобрать профиль ↗'; $('#analysis-results').replaceChildren();
+}
+$('#analysis-player-tab').addEventListener('click', () => setAnalysisType('player'));
+$('#analysis-match-tab').addEventListener('click', () => setAnalysisType('match'));
+$('#analysis-form').addEventListener('submit', event => { event.preventDefault(); runAnalysis(); });
+function metrics(entries) {
+  const row = el('div', 'metrics');
+  for (const [value, label] of entries) { const item = el('div'); item.append(el('strong', '', value ?? '—'), el('small', '', label)); row.append(item); }
+  return row;
+}
+function rankName(tier) {
+  if (!Number.isInteger(tier) || tier < 10) return 'Ранг скрыт';
+  const name = Object.values(ranks)[Math.floor(tier / 10)]; return name ? `${name}${tier < 80 ? ` ${tier % 10}` : ''}` : 'Ранг неизвестен';
+}
+async function runAnalysis() {
+  const raw = $('#analysis-id').value.trim(); if (!raw) return;
+  const type = analysisType; analysisRequest?.abort(); const controller = new AbortController(); analysisRequest = controller;
+  const box = $('#analysis-results'); box.replaceChildren(el('div', 'skeleton')); $('#analyze-submit').disabled = true;
+  try {
+    const data = await api(`/api/analysis/${type}?id=${encodeURIComponent(raw)}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(22000)]) });
+    if (controller.signal.aborted) return;
+    box.replaceChildren();
+    if (data.stale) box.append(el('div', 'notice', 'Источник временно недоступен. Показан сохранённый анализ с указанным временем получения.'));
+    if (type === 'player') renderPlayer(box, data); else renderMatch(box, data);
+    box.append(el('p', 'data-note', `Получено: ${new Date(data.fetchedAt * 1000).toLocaleString('ru-RU')}.`), link('Посмотреть в OpenDota ↗', data.sourceURL, 'text-link'));
+  } catch (error) { if (!controller.signal.aborted) empty(box, error.message, runAnalysis); }
+  finally { if (analysisRequest === controller) $('#analyze-submit').disabled = false; }
+}
+function renderPlayer(box, data) {
+  const card = el('div', 'analysis-card'); card.append(el('div', 'eyebrow', `DOTA ID / ${data.accountId}`), el('h2', '', data.name), el('p', 'data-note', rankName(data.rankTier)));
+  card.append(metrics([[data.sampleSize ? pct(data.wins / data.sampleSize * 100) : '—', 'побед в выборке'], [number(data.sampleSize), 'матчей в выборке'], [data.lifetimeGames === null ? '—' : number(data.lifetimeGames), 'известно OpenDota']])); box.append(card);
+  const smurf = el('div', `smurf-card ${data.smurf.level}`); smurf.append(el('div', 'eyebrow', 'ПРОВЕРКА ПРИЗНАКОВ СМУРФА'), el('h2', '', data.smurf.title), el('p', 'data-note', `Сопоставимых рейтинговых матчей: ${data.smurf.sampleSize}. Для оценки нужно не менее 20.`));
+  for (const signal of data.smurf.signals) { const row = el('div', 'signal'); row.append(el('strong', '', signal.title), el('p', '', signal.detail)); smurf.append(row); }
+  smurf.append(el('p', 'data-note', data.smurf.explanation)); box.append(smurf);
+  box.append(el('p', 'data-note', data.historyNotice));
+  if (data.matches.length) {
+    box.append(el('h2', 'analysis-heading', 'Последние доступные матчи'));
+    const list = el('div', 'match-list');
+    for (const match of data.matches) {
+      const button = el('button', 'match-row'); button.type = 'button';
+      if (match.hero.image) { const img = el('img'); img.src = match.hero.image; img.alt = ''; img.loading = 'lazy'; button.append(img); }
+      const info = el('div'); info.append(el('strong', '', match.hero.name), el('small', '', `${match.id} · ${match.startTime ? date(match.startTime) : 'Дата неизвестна'}`));
+      button.append(info, el('span', match.won === null ? '' : match.won ? 'result-win' : 'result-loss', `${match.won === null ? '—' : match.won ? 'Победа' : 'Поражение'} · ${match.kills ?? '—'}/${match.deaths ?? '—'}/${match.assists ?? '—'}`));
+      button.addEventListener('click', () => { setAnalysisType('match'); $('#analysis-id').value = match.id; runAnalysis(); }); list.append(button);
+    }
+    box.append(list);
+  }
+}
+function renderMatch(box, data) {
+  const card = el('div', 'analysis-card'); card.append(el('div', 'eyebrow', `МАТЧ / ${data.id}`), el('h2', '', data.winner ? `Победа ${data.winner}` : 'Результат недоступен'));
+  card.append(metrics([[`${data.radiantScore ?? '—'} : ${data.direScore ?? '—'}`, 'счёт Radiant : Dire'], [data.duration === null ? '—' : `${Math.floor(data.duration / 60)}:${String(data.duration % 60).padStart(2, '0')}`, 'длительность'], [data.startTime ? date(data.startTime) : '—', 'дата матча']])); box.append(card, el('div', 'notice', data.notice));
+  for (const insight of data.insights) { const row = el('div', 'insight'); row.append(el('span', '', `${insight.title} · ${insight.hero}`), el('strong', '', number(insight.value))); box.append(row); }
+  for (const team of ['Radiant', 'Dire']) {
+    box.append(el('h2', 'analysis-heading', team));
+    for (const player of data.players.filter(p => p.side === team)) {
+      const row = el('details', 'player-row'); const summary = el('summary');
+      if (player.hero.image) { const img = el('img'); img.src = player.hero.image; img.alt = ''; img.loading = 'lazy'; summary.append(img); }
+      const info = el('div'); info.append(el('strong', '', player.hero.name), el('small', '', player.name || (player.accountId ? `Игрок ${player.accountId}` : 'Анонимный игрок')));
+      summary.append(info, el('span', '', `${player.kills ?? '—'} / ${player.deaths ?? '—'} / ${player.assists ?? '—'}`)); row.append(summary);
+      const detail = el('div', 'player-detail'); detail.append(metrics([[player.gpm, 'золота / мин'], [player.xpm, 'опыта / мин'], [player.lastHits, 'добиваний']]));
+      if (player.accountId) { const button = el('button', 'text-button', 'Анализ профиля и признаки смурфа ↗'); button.addEventListener('click', () => { setAnalysisType('player'); $('#analysis-id').value = player.accountId; runAnalysis(); }); detail.append(button); }
+      row.append(detail); box.append(row);
+    }
+  }
+}
+let linkedSteam = null, steamLoading = false;
+async function loadSteam() {
+  if (!initData) { $('#connect-steam').disabled = true; $('#check-steam').hidden = true; $('#steam-status').textContent = 'Для привязки Steam открой приложение из Telegram-бота.'; return; }
+  if (steamLoading) return; steamLoading = true;
+  try {
+    linkedSteam = (await api('/api/steam/status')).steam;
+    $('#steam-badge').textContent = linkedSteam ? 'Подключён' : 'Не подключён'; $('#steam-badge').classList.toggle('connected', Boolean(linkedSteam));
+    $('#steam-title').textContent = linkedSteam ? `Steam ID ${linkedSteam.steamId}` : 'Твой Steam. Твоя статистика.';
+    $('#steam-description').textContent = linkedSteam ? 'Аккаунт подтверждён Steam. Для анализа нужна общедоступная история матчей в настройках Dota 2.' : 'Подключи аккаунт через официальный вход Steam и открывай свой анализ в одно нажатие.';
+    $('#connect-steam').hidden = Boolean(linkedSteam); $('#steam-actions').hidden = !linkedSteam; $('#steam-status').textContent = '';
+  } catch (error) { $('#steam-status').textContent = error.message; }
+  finally { steamLoading = false; }
+}
+$('#connect-steam').addEventListener('click', async () => {
+  $('#connect-steam').disabled = true;
+  try {
+    const data = await api('/api/steam/start', { method: 'POST' }); $('#steam-status').textContent = 'Подтверди вход на сайте Steam, вернись сюда и нажми «Проверить подключение».';
+    if (tg?.openLink) tg.openLink(data.url); else window.open(data.url, '_blank', 'noopener,noreferrer');
+  } catch (error) { $('#steam-status').textContent = error.message; }
+  finally { $('#connect-steam').disabled = false; }
+});
+$('#check-steam').addEventListener('click', loadSteam);
+$('#unlink-steam').addEventListener('click', async () => {
+  $('#unlink-steam').disabled = true;
+  try { await api('/api/steam/unlink', { method: 'POST' }); await loadSteam(); toast('Steam отключён'); }
+  catch (error) { $('#steam-status').textContent = error.message; }
+  finally { $('#unlink-steam').disabled = false; }
+});
+$('#analyze-own').addEventListener('click', () => { if (!linkedSteam) return; go('analysis'); setAnalysisType('player'); $('#analysis-id').value = linkedSteam.accountId; runAnalysis(); });
+window.addEventListener('focus', () => { if (state.tab === 'profile') loadSteam(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state.tab === 'profile') loadSteam(); });
 
 $('#heroes').replaceChildren(...Array.from({ length: 5 }, () => el('div', 'skeleton')));
 await loadProfile(); syncFilters(); navigate(location.hash.slice(1)); loadMeta();

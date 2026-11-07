@@ -189,7 +189,7 @@ export async function handleUpdate(env, update) {
   if (!receipt) return;
   const chatID = message.chat.id;
   if (command === 'app') {
-    await send(env, chatID, '🎮 <b>Dota Watch</b>\nМета по пяти позициям, разборы патчей и ваш любимый ранг — в одном приложении.', { reply_markup: appKeyboard(message.chat.type === 'private') });
+    await send(env, chatID, '🎮 <b>sds DOTA</b>\nМета, контрпики и предметы, сборки героев, анализ матчей и профилей. Подключите Steam в разделе «Моё».', { reply_markup: appKeyboard(message.chat.type === 'private') });
     return;
   }
   if (command === 'meta') {
@@ -231,9 +231,9 @@ export async function handleUpdate(env, update) {
       + (now() - Number(checked[key]) > 1200 ? ' ⚠️ давно не было успешной проверки' : '') : 'ожидание первой проверки';
     answer = `Рассылка: ${active ? 'включена ✅' : 'выключена 🔕'}\nПроверка каждого источника: каждые 10 мин.\nValve: ${stamp('patches_checked')}\nSteam: ${stamp('news_checked')}`;
   } else {
-    answer = '🎮 <b>Dota Patch Watch</b>\n\n/start — подписаться\n/stop — отписаться\n/meta — актуальная мета по пяти позициям\n/latest — запросить последний разбор\n/status — подписка и состояние источников\n\n<b>Мета</b>\nВыберите позицию и ранг кнопками под /meta. Примеры: /meta 2 — мид; /meta 1 legend — керри на Легенде. Источник StatsDota, кеш 1 час. Мета приходит только по вашему запросу.\n\nПроверяю Valve и Steam каждые 10 минут. Крупные патчи, новые герои, баланс и рейтинг. Косметика, турниры и обычные багфиксы не входят в рассылку.\n\nВ общем чате администратор отправляет /start@имя_бота. /latest повторно показывает разбор только по вашему запросу. Выводы о влиянии — оценка по примечаниям, без выдуманной статистики.';
+    answer = '🎮 <b>sds DOTA</b>\n\n/start — подписаться\n/stop — отписаться\n/meta — актуальная мета по пяти позициям\n/latest — запросить последний разбор\n/status — подписка и состояние источников\n\n<b>Мета</b>\nВыберите позицию и ранг кнопками под /meta. Примеры: /meta 2 — мид; /meta 1 legend — керри на Легенде. Источник StatsDota, кеш 1 час. Мета приходит только по вашему запросу.\n\nПроверяю Valve и Steam каждые 10 минут. Крупные патчи, новые герои, баланс и рейтинг. Косметика, турниры и обычные багфиксы не входят в рассылку.\n\nВ общем чате администратор отправляет /start@имя_бота. /latest повторно показывает разбор только по вашему запросу. Выводы о влиянии — оценка по примечаниям, без выдуманной статистики.';
   }
-  if (command === 'help') answer += '\n\n/app — открыть приложение с метой и патчами.';
+  if (command === 'help') answer += '\n\n/app — sds DOTA: сборки, контрпики, анализ матчей и профилей, Steam.';
   await send(env, chatID, answer, ['start', 'help'].includes(command) ? { reply_markup: appKeyboard(message.chat.type === 'private') } : {});
 }
 
@@ -247,7 +247,7 @@ export default {
       const response = new Response(asset.body, asset);
       response.headers.set('X-Content-Type-Options', 'nosniff');
       response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-      response.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https://cdn.cloudflare.steamstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'");
+      response.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https://cdn.cloudflare.steamstatic.com; connect-src 'self' https://api.opendota.com; object-src 'none'; base-uri 'self'; form-action 'self'");
       return response;
     }
     if (request.method !== 'POST' || path !== '/telegram') return new Response('Not found', { status: 404 });

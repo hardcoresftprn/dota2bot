@@ -19,3 +19,14 @@ BEGIN
 END;
 CREATE TABLE IF NOT EXISTS updates (id INTEGER PRIMARY KEY, received INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS leases (key TEXT PRIMARY KEY, owner TEXT NOT NULL, expires INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS steam_accounts (
+  telegram_id INTEGER PRIMARY KEY,
+  steam_id TEXT NOT NULL,
+  linked_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS steam_auth (
+  state TEXT PRIMARY KEY,
+  telegram_id INTEGER NOT NULL,
+  expires INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS steam_auth_user ON steam_auth(telegram_id);

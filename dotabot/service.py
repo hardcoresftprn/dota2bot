@@ -8,7 +8,7 @@ import httpx
 from .telegram import TelegramError
 
 log = logging.getLogger(__name__)
-HELP = """🎮 <b>Dota Patch Watch</b>
+HELP = """🎮 <b>sds DOTA</b>
 
 Слежу за официальными обновлениями Valve: крупными патчами, новыми героями, балансом героев и предметов, изменениями рейтинга.
 

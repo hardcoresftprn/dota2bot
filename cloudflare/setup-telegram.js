@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 const rootEnv = new URL('../.env', import.meta.url);
 const varsPath = new URL('.dev.vars', import.meta.url);
-const config = { ...(existsSync(rootEnv) ? parseEnv(readFileSync(rootEnv, 'utf8')) : {}), ...process.env };
 const local = existsSync(varsPath) ? parseEnv(readFileSync(varsPath, 'utf8')) : {};
+const config = { ...local, ...(existsSync(rootEnv) ? parseEnv(readFileSync(rootEnv, 'utf8')) : {}), ...process.env };
 const args = process.argv.slice(2);
 const index = args.indexOf('--url');
 const value = index >= 0 ? args[index + 1] : config.PUBLIC_WORKER_URL;
@@ -38,6 +38,15 @@ try {
   const health = await fetch(new URL('/healthz', url), { signal: AbortSignal.timeout(20000) });
   if (!health.ok || (await health.text()).trim() !== 'ok') throw new Error('Worker health check failed');
   const me = await call('getMe', {});
+  if (args.includes('--menu-only')) {
+    const menu = { type: 'web_app', text: 'Открыть', web_app: { url: new URL('/app/', url).toString() } };
+    await call('setChatMenuButton', { menu_button: menu });
+    const check = await call('getChatMenuButton', {});
+    if (check.type !== 'web_app' || check.text !== menu.text || check.web_app?.url !== menu.web_app.url) throw new Error('Menu not confirmed');
+    console.log(`Кнопка меню «Открыть» настроена: https://t.me/${me.username}`);
+    console.log('Для отдельной кнопки запуска в профиле и списке чатов включите Main Mini App через BotFather.');
+    process.exit(0);
+  }
   const webhook = await call('getWebhookInfo', {});
   const target = new URL('/telegram', url).toString();
   if (webhook.url && webhook.url !== target && !args.includes('--replace-webhook')) throw new Error('Бот уже использует другой webhook. Для переноса добавьте --replace-webhook.');
@@ -55,11 +64,11 @@ try {
     { command: 'stop', description: 'Отключить рассылку' },
     { command: 'latest', description: 'Последний сохранённый разбор' },
     { command: 'meta', description: 'Мета по позициям и рангам' },
-    { command: 'app', description: 'Открыть приложение: мета и патчи' },
+    { command: 'app', description: 'sds DOTA: сборки, контрпики и анализ' },
     { command: 'status', description: 'Подписка и проверка источников' },
     { command: 'help', description: 'Как пользоваться ботом' },
   ] });
-  await call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Открыть приложение', web_app: { url: new URL('/app/', url).toString() } } });
+  await call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Открыть', web_app: { url: new URL('/app/', url).toString() } } });
   await call('setWebhook', { url: target, secret_token: secret, allowed_updates: ['message', 'callback_query'], max_connections: 1, drop_pending_updates: false });
   const check = await call('getWebhookInfo', {});
   if (check.url !== target) throw new Error('Webhook not confirmed');
