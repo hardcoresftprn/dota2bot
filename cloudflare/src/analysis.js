@@ -17,6 +17,6 @@ export async function analyzePlayer(db, raw) {
 }
 export async function analyzeMatch(db, raw) {
   if (!/^[1-9]\d{0,11}$/.test(raw || '')) throw new DataError('Укажите числовой ID матча (до 12 цифр).', 400);
-  const cached = await cachedData(db, `match_analysis:v1:${raw}`, 1800, async () => summarizeMatch(await openDota(db, `/matches/${raw}`)));
+  const cached = await cachedData(db, `match_analysis:v2:${raw}`, value => value.parsed ? 1800 : 30, async () => summarizeMatch(await openDota(db, `/matches/${raw}`)));
   return { ...cached.value, fetchedAt: cached.fetchedAt, stale: cached.stale };
 }

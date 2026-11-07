@@ -53,6 +53,7 @@ export function summarizeMatch(match, heroes = {}) {
     accountId: accountID(player.account_id), name: typeof player.personaname === 'string' ? player.personaname.slice(0, 80) : null,
     side: player.player_slot < 128 ? 'Radiant' : 'Dire', lastHits: finite(player.last_hits), denies: finite(player.denies),
     heroDamage: finite(player.hero_damage), towerDamage: finite(player.tower_damage), healing: finite(player.hero_healing),
+    goldAt10: finite(player.gold_t?.[10]), lastHitsAt10: finite(player.lh_t?.[10]), laneEfficiency: finite(player.lane_efficiency_pct),
     items: [0, 1, 2, 3, 4, 5].map(i => player[`item_${i}`]).filter(id => Number.isInteger(id) && id > 0) }));
   const insights = [];
   const top = (field, title) => {

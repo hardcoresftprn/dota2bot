@@ -1,21 +1,21 @@
-import { accountID, summarizePlayer, summarizeMatch, buildStages, DataError } from './dota-core.js';
+import { accountID, summarizePlayer, summarizeMatch, buildStages, DataError } from './dota-core.js?v=5';
 
 // Use OpenDota's supported public CORS API if the Worker's shared egress IP is limited.
 // No Telegram credentials, server secrets, arbitrary hosts, or response uploads.
 const cache = new Map();
 const source = 'https://api.opendota.com/api';
-async function readJSON(path, signal) {
-  const response = await fetch(path, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000), credentials: 'omit' });
+async function readJSON(path, signal, refresh = false) {
+  const response = await fetch(path, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000), credentials: 'omit', ...(refresh ? { cache: 'no-store' } : {}) });
   if (response.status === 429) throw new DataError('OpenDota ограничил запросы. Попробуйте позже.', 429);
   if (response.status === 404) throw new DataError('Данные не найдены в OpenDota. Проверьте ID.', 404);
   if (!response.ok) throw new DataError('Не удалось получить данные OpenDota. Попробуйте позже.');
   return response.json();
 }
-export async function clientPublicData(path, { signal } = {}) {
+export async function clientPublicData(path, { signal, refresh = false } = {}) {
   const url = new URL(path, 'https://app.invalid');
   const timestamp = Math.floor(Date.now() / 1000);
   const saved = cache.get(url.pathname + url.search);
-  if (saved?.expiresAt > timestamp) return saved.value;
+  if (!refresh && saved?.expiresAt > timestamp) return saved.value;
   let value, ttl = 900;
   if (url.pathname === '/api/analysis/player' || url.pathname === '/api/analysis/match') {
     const isPlayer = url.pathname.endsWith('/player');
@@ -28,7 +28,7 @@ export async function clientPublicData(path, { signal } = {}) {
       if (results.some(result => result.status === 'rejected')) throw results.find(result => result.status === 'rejected').reason;
       value = summarizePlayer(id, ...results.map(result => result.value), heroes);
     } else {
-      value = summarizeMatch(await readJSON(`${source}/matches/${id}`, signal), heroes); ttl = 1800;
+      value = summarizeMatch(await readJSON(`${source}/matches/${id}`, signal, refresh), heroes); ttl = value.parsed ? 1800 : 30;
     }
   } else if (url.pathname === '/api/build') {
     // The Worker validates all draft parameters and supplies only public catalogue data.

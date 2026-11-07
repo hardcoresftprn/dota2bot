@@ -7,7 +7,7 @@ export async function cachedData(db, key, ttl, load) {
   const timestamp = epoch();
   let saved;
   try { saved = JSON.parse((await q(db, 'SELECT value FROM meta WHERE key=?', key).first())?.value); } catch { /* First request. */ }
-  if (saved && timestamp - saved.fetchedAt < ttl) return { ...saved, stale: false };
+  if (saved && timestamp - saved.fetchedAt < (typeof ttl === 'function' ? ttl(saved.value) : ttl)) return { ...saved, stale: false };
   const owner = crypto.randomUUID();
   const lock = await q(db, 'INSERT INTO leases(key,owner,expires) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,expires=excluded.expires WHERE leases.expires<? RETURNING owner', key, owner, timestamp + 25, timestamp).first();
   if (!lock) {

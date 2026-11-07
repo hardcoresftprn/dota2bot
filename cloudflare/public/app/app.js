@@ -1,4 +1,5 @@
-import { clientPublicData } from './public-data.js?v=4';
+import { clientPublicData } from './public-data.js?v=5';
+import { requestReplayParse, watchReplayParse } from './replay-parse.js?v=1';
 const $ = selector => document.querySelector(selector);
 const roles = ['Керри', 'Мид', 'Оффлейн', 'Поддержка', 'Полная поддержка'];
 const shortRoles = ['Керри', 'Мид', 'Оффлейн', 'Саппорт', 'Хард сап'];
@@ -130,12 +131,14 @@ $('#refresh-patches').addEventListener('click', loadPatches);
 function syncBackButton() { if (!tg?.BackButton) return; if ($('#hero-dialog').open || state.tab !== 'meta') tg.BackButton.show(); else tg.BackButton.hide(); }
 function navigate(tab) {
   if (!['meta', 'counters', 'builds', 'analysis', 'patches', 'profile'].includes(tab)) tab = 'meta';
+  if (state.tab === 'analysis' && tab !== 'analysis') analysisRequest?.abort();
   state.tab = tab; for (const key of ['meta', 'counters', 'builds', 'analysis', 'patches', 'profile']) $(`#${key}-view`).hidden = key !== tab;
   for (const node of document.querySelectorAll('[data-tab]')) { const active = node.dataset.tab === tab; node.classList.toggle('active', active); if (active) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current'); }
   if (tab === 'patches' && !state.events) loadPatches();
   if (tab === 'counters') openCounters();
   if (tab === 'builds') openBuilds();
   if (tab === 'profile') loadSteam();
+  if (tab === 'analysis' && analysisRequest?.signal.aborted && $('#analysis-id').value.trim()) runAnalysis();
   syncBackButton(); window.scrollTo({ top: 0, behavior: 'instant' });
 }
 function go(tab) { if (location.hash.slice(1) === tab) navigate(tab); else location.hash = tab; }
@@ -328,6 +331,16 @@ $('#build-search').addEventListener('input', () => { if (builds.heroes) renderBu
 $('#build-edit-enemies').addEventListener('click', () => go('counters'));
 
 let analysisType = 'player', analysisRequest;
+const replayJobs = new Map();
+function replayJob(id) {
+  let job = replayJobs.get(id);
+  try { job ||= JSON.parse(sessionStorage.getItem(`sds-dota-replay:${id}`)); } catch { /* Storage may be disabled. */ }
+  return job && Date.now() - job.requestedAt < 3600000 && /^[1-9]\d{0,19}$/.test(job.id) ? job : null;
+}
+function saveReplayJob(id, job) {
+  if (job) replayJobs.set(id, job); else replayJobs.delete(id);
+  try { if (job) sessionStorage.setItem(`sds-dota-replay:${id}`, JSON.stringify(job)); else sessionStorage.removeItem(`sds-dota-replay:${id}`); } catch { /* Keep the in-memory job. */ }
+}
 function setAnalysisType(type) {
   analysisRequest?.abort(); $('#analyze-submit').disabled = false; analysisType = type;
   $('#analysis-player-tab').setAttribute('aria-pressed', String(type === 'player')); $('#analysis-match-tab').setAttribute('aria-pressed', String(type === 'match'));
@@ -355,12 +368,57 @@ async function runAnalysis() {
   try {
     const data = await api(`/api/analysis/${type}?id=${encodeURIComponent(raw)}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(22000)]) });
     if (controller.signal.aborted) return;
-    box.replaceChildren();
-    if (data.stale) box.append(el('div', 'notice', 'Источник временно недоступен. Показан сохранённый анализ с указанным временем получения.'));
-    if (type === 'player') renderPlayer(box, data); else renderMatch(box, data);
-    box.append(el('p', 'data-note', `Получено: ${new Date(data.fetchedAt * 1000).toLocaleString('ru-RU')}.`), link('Посмотреть в OpenDota ↗', data.sourceURL, 'text-link'));
+    showAnalysis(box, type, data);
   } catch (error) { if (!controller.signal.aborted) empty(box, error.message, runAnalysis); }
   finally { if (analysisRequest === controller) $('#analyze-submit').disabled = false; }
+}
+function showAnalysis(box, type, data) {
+  box.replaceChildren();
+  if (data.stale) box.append(el('div', 'notice', 'Источник временно недоступен. Показан сохранённый анализ с указанным временем получения.'));
+  if (type === 'player') renderPlayer(box, data); else renderMatch(box, data);
+  box.append(el('p', 'data-note', `Получено: ${new Date(data.fetchedAt * 1000).toLocaleString('ru-RU')}.`), link('Посмотреть в OpenDota ↗', data.sourceURL, 'text-link'));
+}
+function renderReplayControls(box, data) {
+  if (data.parsed) { saveReplayJob(data.id, null); return; }
+  const signal = analysisRequest.signal;
+  const panel = el('div', 'replay-controls');
+  const status = el('p', 'data-note', replayJob(data.id) ? 'Запрос уже отправлен. Проверьте, готов ли подробный разбор.' : 'Запросите обработку реплея, чтобы получить доступные подробные данные матча.');
+  status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+  const button = el('button', 'outline-button', replayJob(data.id) ? 'Проверить готовность ↻' : 'Запросить разбор реплея ↗'); button.type = 'button';
+  button.addEventListener('click', async () => {
+    if (button.disabled || signal.aborted) return;
+    button.disabled = true;
+    try {
+      let job = replayJob(data.id);
+      if (!job) {
+        status.textContent = 'Отправляем запрос на разбор реплея…';
+        const id = await requestReplayParse(data.id, { signal });
+        job = { id, requestedAt: Date.now() }; saveReplayJob(data.id, job);
+      }
+      status.textContent = 'OpenDota обрабатывает запрос. Готовый результат появится здесь автоматически. Можно уйти и проверить готовность позже.';
+      button.textContent = 'Ожидаем разбор…';
+      const result = await watchReplayParse(data.id, job.id, { signal });
+      if (signal.aborted) return;
+      if (result.state === 'pending') {
+        status.textContent = 'Разбор ещё идёт. Нажмите «Проверить готовность» чуть позже — новый запрос не потребуется.';
+      } else {
+        saveReplayJob(data.id, null);
+        showAnalysis(box, 'match', result.data);
+        if (result.state === 'complete') toast('Реплей разобран. Статистика обновлена.');
+        else {
+          const message = el('p', 'notice', 'Обработка завершилась, но подробные данные не появились. Реплей может быть недоступен или обработка не удалась. Проверьте страницу матча в OpenDota.');
+          message.setAttribute('role', 'status'); box.querySelector('.replay-controls')?.prepend(message);
+        }
+      }
+    } catch (error) {
+      if (!signal.aborted) status.textContent = error instanceof TypeError || error.name === 'TimeoutError'
+        ? 'Не удалось получить подтверждение OpenDota. Запрос мог быть принят. Проверьте матч в OpenDota перед повторной отправкой.' : error.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = replayJob(data.id) ? 'Проверить готовность ↻' : 'Запросить разбор реплея ↗';
+    }
+  });
+  panel.append(status, button, link('Открыть матч в OpenDota ↗', data.sourceURL, 'text-button')); box.append(panel);
 }
 function renderPlayer(box, data) {
   const card = el('div', 'analysis-card'); card.append(el('div', 'eyebrow', `DOTA ID / ${data.accountId}`), el('h2', '', data.name), el('p', 'data-note', rankName(data.rankTier)));
@@ -385,6 +443,7 @@ function renderPlayer(box, data) {
 function renderMatch(box, data) {
   const card = el('div', 'analysis-card'); card.append(el('div', 'eyebrow', `МАТЧ / ${data.id}`), el('h2', '', data.winner ? `Победа ${data.winner}` : 'Результат недоступен'));
   card.append(metrics([[`${data.radiantScore ?? '—'} : ${data.direScore ?? '—'}`, 'счёт Radiant : Dire'], [data.duration === null ? '—' : `${Math.floor(data.duration / 60)}:${String(data.duration % 60).padStart(2, '0')}`, 'длительность'], [data.startTime ? date(data.startTime) : '—', 'дата матча']])); box.append(card, el('div', 'notice', data.notice));
+  renderReplayControls(box, data);
   for (const insight of data.insights) { const row = el('div', 'insight'); row.append(el('span', '', `${insight.title} · ${insight.hero}`), el('strong', '', number(insight.value))); box.append(row); }
   for (const team of ['Radiant', 'Dire']) {
     box.append(el('h2', 'analysis-heading', team));
@@ -394,6 +453,7 @@ function renderMatch(box, data) {
       const info = el('div'); info.append(el('strong', '', player.hero.name), el('small', '', player.name || (player.accountId ? `Игрок ${player.accountId}` : 'Анонимный игрок')));
       summary.append(info, el('span', '', `${player.kills ?? '—'} / ${player.deaths ?? '—'} / ${player.assists ?? '—'}`)); row.append(summary);
       const detail = el('div', 'player-detail'); detail.append(metrics([[player.gpm, 'золота / мин'], [player.xpm, 'опыта / мин'], [player.lastHits, 'добиваний']]));
+      if (data.parsed) detail.append(metrics([[player.goldAt10, 'золота на 10 мин'], [player.lastHitsAt10, 'добиваний на 10 мин'], [player.laneEfficiency == null ? null : pct(player.laneEfficiency), 'эффективность линии']]));
       if (player.accountId) { const button = el('button', 'text-button', 'Анализ профиля и признаки смурфа ↗'); button.addEventListener('click', () => { setAnalysisType('player'); $('#analysis-id').value = player.accountId; runAnalysis(); }); detail.append(button); }
       row.append(detail); box.append(row);
     }
