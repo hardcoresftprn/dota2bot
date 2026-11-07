@@ -47,7 +47,9 @@ test('Steam endpoints verify Telegram, origin, allowlist and isolate users', asy
 test('Steam verifies signatures server-side and consumes state once', async t => {
   const DB = new D1(), start = await startSteam(DB, 100, 'https://example.com'); let calls = 0;
   t.mock.method(globalThis, 'fetch', async (url, options) => {
-    calls++; assert.equal(url, 'https://steamcommunity.com/openid/login'); assert.equal(options.body.get('openid.mode'), 'check_authentication');
+    calls++; assert.equal(url, 'https://steamcommunity.com/openid/login'); assert.equal(new URLSearchParams(options.body).get('openid.mode'), 'check_authentication');
+    assert.equal(options.headers['Content-Type'], 'application/x-www-form-urlencoded;charset=UTF-8');
+    assert.equal(typeof options.body, 'string'); assert.equal(options.redirect, 'manual');
     return new Response('ns:http://specs.openid.net/auth/2.0\nis_valid:true\n');
   });
   const url = callback(start); await finishSteam(new Request(url), DB);

@@ -4,7 +4,7 @@ import { now } from './content.js';
 import { HERO_IMAGES } from './hero-images.js';
 import { analyzeMatch, analyzePlayer } from './analysis.js';
 import { heroBuild, heroBuildContext, itemCatalogue, counterItems } from './builds.js';
-import { steamAccount, startSteam, finishSteam, unlinkSteam, steamResult } from './steam.js';
+import { steamAccount, startSteam, finishSteam, unlinkSteam, steamResult, SteamAuthError, recordSteamFailure } from './steam.js';
 import { DataError } from './dota-data.js';
 import names from './names.js';
 
@@ -48,7 +48,10 @@ export async function miniappAPI(request, env) {
     }
     if (url.pathname === '/api/steam/callback' && request.method === 'GET') {
       try { await finishSteam(request, env.DB); return steamResult('Steam подтверждён и привязан к вашему аккаунту Telegram.', true); }
-      catch { return steamResult('Вернитесь в приложение и начните подключение заново. Подтверждение Steam отменено, истекло или не прошло проверку.'); }
+      catch (error) {
+        const code = await recordSteamFailure(env.DB, error);
+        return steamResult(error instanceof SteamAuthError ? error.message : 'Не удалось сохранить подключение. Повторите попытку через минуту.', false, code);
+      }
     }
     if (url.pathname.startsWith('/api/steam/') && ['GET', 'POST'].includes(request.method)) {
       if (request.method === 'POST' && request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return json({ error: 'Forbidden' }, 403);
