@@ -43,7 +43,7 @@ test('public meta serves each actual role with trusted images and preserves fres
   for (const role of POSITIONS) {
     const raw = JSON.parse(readFileSync(new URL(`./fixtures/meta-${role.key}.json`, import.meta.url)));
     const data = normalizeSlice(raw, 'all', role.key, timestamp);
-    DB.db.prepare('INSERT INTO meta(key,value) VALUES(?,?)').run(`hero_meta:v1:all:${role.key}`, JSON.stringify(data));
+    DB.db.prepare('INSERT INTO meta(key,value) VALUES(?,?)').run(`hero_meta:v2:all:${role.key}`, JSON.stringify(data));
     const response = await miniappAPI(req(`meta?position=${role.id}&rank=all`), { DB });
     assert.equal(response.status, 200);
     const body = await response.json(); assert.equal(body.role.id, role.id); assert.equal(body.position, role.key); assert.equal(body.heroes.length, 5);

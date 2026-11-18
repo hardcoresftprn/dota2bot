@@ -100,7 +100,7 @@ export async function miniappAPI(request, env) {
       if (!selection({ rank, position })) return json({ error: 'Неверный ранг или позиция.' }, 400);
       const latest = await query(env.DB, "SELECT key FROM events WHERE key LIKE 'patch:%' ORDER BY published DESC LIMIT 1").first();
       const knownPatch = latest?.key.slice(6) || null;
-      const [{ role, data }] = await loadMeta(env.DB, rank, position);
+      const [{ role, data }] = await loadMeta(env.DB, rank, position, now(), env.ASSETS);
       if (!data) return json({ error: 'Источник временно недоступен. Попробуйте позже.' }, 503);
       return json({ ...data, role, knownPatch, stale: isSliceStale(data, knownPatch), olderPatch: olderPatch(data.patch, knownPatch),
         sourceURL: metaURL(rank, role.key), methodologyURL: `${META_ORIGIN}/en/meta/methodology`,

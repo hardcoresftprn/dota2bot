@@ -15,7 +15,7 @@ function envFor(t) {
   t.mock.method(Date, 'now', () => NOW * 1000);
   return env;
 }
-const cache = (db, data) => statement(db, 'INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)', `hero_meta:v1:${data.requestedRank}:${data.position}`, JSON.stringify(data)).run();
+const cache = (db, data) => statement(db, 'INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)', `hero_meta:v2:${data.requestedRank}:${data.position}`, JSON.stringify(data)).run();
 const command = (text, id = 1) => ({ update_id: id, message: { text, chat: { id: 42, type: 'private' }, from: { id: 42 } } });
 const callback = (data, id = 2) => ({ update_id: id, callback_query: { id: String(id), data, from: { id: 42 }, message: { message_id: 50, chat: { id: 42, type: 'private' }, from: { id: 999, is_bot: true } } } });
 

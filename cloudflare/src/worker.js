@@ -196,7 +196,7 @@ export async function handleUpdate(env, update) {
     const params = selection || parseMetaArgs(message.text);
     const result = params.error ? { text: params.error }
       : params.ranksMenu ? rankMenu(params.rank, params.position)
-        : await metaReply(env.DB, params.rank, params.position);
+        : await metaReply(env.DB, params.rank, params.position, env.ASSETS);
     if (callback) {
       try {
         await telegram(env, 'editMessageText', { chat_id: chatID, message_id: message.message_id,

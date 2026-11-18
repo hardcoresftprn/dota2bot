@@ -78,7 +78,7 @@ function renderSource(data) {
   const box = $('#meta-source'); const top = el('div', 'source-top'); top.append(el('span', '', `Патч ${data.patch} · ${ranks[data.rank]}`), el('span', '', `${date(data.sampleFrom)} — ${date(data.sampleTo)}`));
   box.append(top, el('p', '', `Выборка позиции: ≈${number(data.sampleMatches)} матчей. Пики — доля героя на выбранной позиции.`), el('p', '', `Рейтинг учитывает победы, популярность и размер выборки. Он не гарантирует победу в отдельном матче.`));
   const stamp = new Date(data.updatedAt * 1000).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
-  box.append(el('p', '', `Данные источника: ${stamp}. Проверка — раз в час.`));
+  box.append(el('p', '', `Данные источника: ${stamp}. ${data.published ? 'Статистика обновляется каждые 6 часов.' : 'Проверка — раз в час.'}`));
   const links = el('div', 'source-links'); links.append(link('Источник: StatsDota ↗', data.sourceURL), link('Как считается рейтинг ↗', data.methodologyURL)); box.append(links);
 }
 function showHero(hero, data) {

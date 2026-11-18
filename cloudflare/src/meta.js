@@ -3,6 +3,7 @@ import { escape, now } from './content.js';
 export const META_ORIGIN = 'https://statsdota.com';
 export const CACHE_TTL = 3600;
 export const MAX_CACHE_AGE = 7 * 86400;
+export const SNAPSHOT_FRESH_AGE = 8 * 3600;
 export const POSITIONS = [
   { id: 1, key: 'carry', name: 'Керри', hint: 'Сохраняйте темп фарма и выходите на драки с ключевыми предметами.' },
   { id: 2, key: 'mid', name: 'Мид', hint: 'Используйте уровни, контроль рун и первые предметы для давления на карту.' },
@@ -14,7 +15,7 @@ export const RANKS = { all: 'Все ранги', herald: 'Рекрут', guardia
 const roleAliases = { carry: 1, керри: 1, mid: 2, мид: 2, offlane: 3, оффлейн: 3, support: 4, поддержка: 4, hard: 5 };
 const rankAliases = Object.fromEntries(Object.entries(RANKS).map(([key, name]) => [name.toLowerCase(), key]));
 const query = (db, sql, ...args) => db.prepare(sql).bind(...args);
-const cacheKey = (rank, position) => `hero_meta:v1:${rank}:${position}`;
+const cacheKey = (rank, position) => `hero_meta:v2:${rank}:${position}`;
 export const metaURL = (rank, position) => `${META_ORIGIN}/en/meta/${rank}/${position}`;
 const usage = 'Примеры: /meta — все пять позиций; /meta 2 — мид; /meta 1 legend — керри на Легенде.\nРанги: herald, guardian, crusader, archon, legend, ancient, divine, immortal. Можно выбрать кнопками.';
 
@@ -70,14 +71,24 @@ export function normalizeSlice(data, rank, position, checkedAt = now()) {
     sampleFrom: data.sampleFrom, sampleTo: data.sampleTo, sampleMatches: data.sampleMatches,
     fallback: Boolean(data.fallback) || data.rank !== rank, heroes, checkedAt };
 }
-async function fetchSlice(rank, position, checkedAt) {
+export async function fetchMetaSlice(rank, position, checkedAt = now()) {
   const url = new URL('/api/meta-board', META_ORIGIN);
   url.search = new URLSearchParams({ rank, position, lang: 'en', v: 'board' });
   const response = await fetch(url.toString(), { signal: AbortSignal.timeout(12000), headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('Meta source unavailable');
-  return normalizeSlice(await response.json(), rank, position, checkedAt);
+  const data = await response.json();
+  normalizeSlice(data, rank, position, checkedAt);
+  // Keep only the fields required to validate and render a published slice.
+  return Object.fromEntries(['rank', 'position', 'patch', 'unavailable', 'fallback', 'minGames', 'fetchedAt', 'updatedAt', 'sampleFrom', 'sampleTo', 'sampleMatches', 'rows'].map(key => [key, key === 'rows' ? data.rows.slice(0, 30) : data[key]]));
 }
-async function refreshSlice(db, rank, position, cached, checkedAt) {
+export function publishedMetaSlice(snapshot, rank, position, checkedAt = now()) {
+  if (snapshot?.version !== 1 || !Number.isInteger(snapshot.checkedAt) || snapshot.checkedAt > checkedAt + 60
+      || checkedAt - snapshot.checkedAt >= MAX_CACHE_AGE) throw new Error('Meta snapshot expired');
+  const value = normalizeSlice(snapshot.slices?.[rank]?.[position], rank, position, snapshot.checkedAt);
+  if (checkedAt - value.updatedAt >= MAX_CACHE_AGE || checkedAt - Date.parse(value.sampleTo) / 1000 >= MAX_CACHE_AGE) throw new Error('Meta snapshot source expired');
+  return { ...value, published: true };
+}
+async function refreshSlice(db, rank, position, cached, checkedAt, assets, snapshot) {
   const key = cacheKey(rank, position);
   const owner = crypto.randomUUID();
   const lock = await query(db, `INSERT INTO leases(key,owner,expires) VALUES(?,?,?)
@@ -85,23 +96,35 @@ async function refreshSlice(db, rank, position, cached, checkedAt) {
   if (!lock) return cached || null;
   try {
     let value;
-    try { value = await fetchSlice(rank, position, checkedAt); }
+    try {
+      value = assets ? publishedMetaSlice(snapshot, rank, position, checkedAt)
+        : normalizeSlice(await fetchMetaSlice(rank, position, checkedAt), rank, position, checkedAt);
+      value.loadedAt = checkedAt;
+    }
     catch { value = { ...(cached || {}), failedAt: checkedAt, retryAt: checkedAt + 300 }; }
     await query(db, 'INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', key, JSON.stringify(value)).run();
     return value;
   } finally { await query(db, 'DELETE FROM leases WHERE key=? AND owner=?', key, owner).run(); }
 }
-export async function loadMeta(db, rank, selected, checkedAt = now()) {
+export async function loadMeta(db, rank, selected, checkedAt = now(), assets = null) {
   if (!Object.hasOwn(RANKS, rank) || !Number.isInteger(selected) || selected < 0 || selected > 5) throw new Error('Invalid meta selection');
   const positions = selected ? POSITIONS.filter(role => role.id === selected) : POSITIONS;
   const keys = positions.map(role => cacheKey(rank, role.key));
   const stored = (await query(db, 'SELECT key,value FROM meta WHERE key IN (SELECT value FROM json_each(?))', JSON.stringify(keys)).all()).results;
   const cache = new Map();
   for (const row of stored) { try { cache.set(row.key, JSON.parse(row.value)); } catch { /* Re-fetch corrupt cache. */ } }
+  const reusable = cached => cached && ((cached.retryAt || 0) > checkedAt || (!cached.failedAt && checkedAt - (cached.loadedAt || cached.checkedAt) < CACHE_TTL));
+  let snapshot;
+  if (assets && positions.some(role => !reusable(cache.get(cacheKey(rank, role.key))))) {
+    try {
+      const response = await assets.fetch('https://assets.local/meta-data.json');
+      if (response.ok) snapshot = await response.json();
+    } catch { /* Refresh records a failure and preserves usable cached slices. */ }
+  }
   const results = await Promise.allSettled(positions.map(async role => {
     const cached = cache.get(cacheKey(rank, role.key));
-    if (cached && ((cached.retryAt || 0) > checkedAt || (!cached.failedAt && checkedAt - cached.checkedAt < CACHE_TTL))) return cached;
-    return refreshSlice(db, rank, role.key, cached, checkedAt);
+    if (reusable(cached)) return cached;
+    return refreshSlice(db, rank, role.key, cached, checkedAt, assets, snapshot);
   }));
   return positions.map((role, index) => {
     const value = results[index].status === 'fulfilled' ? results[index].value : cache.get(cacheKey(rank, role.key));
@@ -116,7 +139,7 @@ export function olderPatch(source, known) {
   return a[3] < b[3];
 }
 export function isSliceStale(data, knownPatch, checkedAt = now()) {
-  return Boolean(data.failedAt) || checkedAt - data.checkedAt >= CACHE_TTL || checkedAt - data.updatedAt > 2 * 86400
+  return Boolean(data.failedAt) || checkedAt - data.checkedAt >= (data.published ? SNAPSHOT_FRESH_AGE : CACHE_TTL) || checkedAt - data.updatedAt > 2 * 86400
     || checkedAt - Date.parse(data.sampleTo) / 1000 > 4 * 86400 || olderPatch(data.patch, knownPatch);
 }
 const number = value => Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -159,8 +182,8 @@ export function renderMeta(slices, rank, selected, knownPatch, checkedAt = now()
     '<a href="https://statsdota.com/en/meta/methodology">Методика расчёта ↗</a>');
   return { text: lines.join('\n'), reply_markup: metaKeyboard(rank, selected) };
 }
-export async function metaReply(db, rank, selected) {
-  const slices = await loadMeta(db, rank, selected);
+export async function metaReply(db, rank, selected, assets = null) {
+  const slices = await loadMeta(db, rank, selected, now(), assets);
   const latest = await query(db, "SELECT key FROM events WHERE key LIKE 'patch:%' ORDER BY published DESC LIMIT 1").first();
   return renderMeta(slices, rank, selected, latest?.key.slice(6));
 }

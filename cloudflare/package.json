@@ -10,6 +10,7 @@
     "db:local": "wrangler d1 execute DB --local --file=schema.sql",
     "db:remote": "wrangler d1 execute DB --remote --file=schema.sql",
     "data:items": "node scripts/refresh-items.js",
+    "data:meta": "node scripts/refresh-meta.js",
     "telegram:setup": "node setup-telegram.js"
   },
   "devDependencies": {
